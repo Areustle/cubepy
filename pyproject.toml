@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=46",
+            "setuptools_scm[toml]>=3.4",
+            "wheel",
+           ]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = 'src/cubepy/_version.py'
+version_scheme = 'post-release'
+local_scheme = 'no-local-version'
+parentdir_prefix_version = 'cubepy-'
+
+[tool.cibuildwheel]
+test-requires = "pytest"
+test-command = "pytest {project}/test"
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64"] #, "universal2", "arm64"]
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+
+[tool.black]
+line-length = 88
+skip-string-normalization = false
+include = '\.pyi?$'
+exclude = '''
+(
+  /(
+      \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+)
+'''
+
+[tool.autopep8]
+max_line_length = 88
+ignore = "E501,W6"  # or ["E501", "W6"]
