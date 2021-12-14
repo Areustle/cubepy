@@ -1,11 +1,10 @@
 import numpy as np
-from cubepy.rules import genz_malik
 
+from cubepy.rules import genz_malik
 
 # def test_genz_malik():
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
 
     # def I1(x):
     #     return x
@@ -23,7 +22,6 @@ if __name__ == '__main__':
 
     # r, e, s = genz_malik(I1, c, h, v)
     # print(c.shape, r.shape, e.shape, s.shape)
-
 
     def fp(x):
         return np.prod(x, 0)

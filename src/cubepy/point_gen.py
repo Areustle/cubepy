@@ -1,4 +1,5 @@
 import itertools
+
 import numpy as np
 
 
@@ -39,10 +40,10 @@ def pts_k0k1(c, r1, r2, p=None):
 
     for i in range(p.shape[0]):
         j = 4 * i
-        p[i, j+1] -= r1[i]
-        p[i, j+2] += r1[i]
-        p[i, j+3] -= r2[i]
-        p[i, j+4] += r2[i]
+        p[i, j + 1] -= r1[i]
+        p[i, j + 2] += r1[i]
+        p[i, j + 3] -= r2[i]
+        p[i, j + 4] += r2[i]
 
     return p
 
