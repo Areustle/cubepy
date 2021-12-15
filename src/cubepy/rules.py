@@ -34,7 +34,7 @@ from typing import Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from . import point_gen
+from . import points
 
 
 @cache
@@ -70,11 +70,11 @@ def genz_malik(
 ):
 
     if centers.ndim != 3:
-        raise ValueError("Invalid Centers Order. Expected 3, got", centers.ndim)
+        raise ValueError("Invalid Centers Order. Expected 3, got ", centers.ndim)
     if halfwidths.ndim != 3:
-        raise ValueError("Invalid widths Order. Expected 3, got", halfwidths.ndim)
+        raise ValueError("Invalid widths Order. Expected 3, got ", halfwidths.ndim)
     if vol.ndim != 2:
-        raise ValueError("Invalid volume Order. Expected 2, got", vol.ndim)
+        raise ValueError("Invalid volume Order. Expected 2, got ", vol.ndim)
 
     # lambda2 = sqrt(9/70), lambda4 = sqrt(9/10), lambda5 = sqrt(9/19)
     # ratio = (lambda2 ** 2) / (lambda4 ** 2)
@@ -88,10 +88,10 @@ def genz_malik(
     width_lambda5 = halfwidths * lambda5
 
     # p shape [ domain_dim, points, regions, events ]
-    p = point_gen.fullsym(centers, width_lambda2, width_lambda4, width_lambda5)
+    p = points.fullsym(centers, width_lambda2, width_lambda4, width_lambda5)
     dim = p.shape[0]
-    d1 = point_gen.num_k0k1(dim)
-    d2 = point_gen.num_k2(dim)
+    d1 = points.num_k0k1(dim)
+    d2 = points.num_k2(dim)
     d3 = d1 + d2
 
     # vals shape [range_dim, points, regions, events]
@@ -135,3 +135,51 @@ def genz_malik(
     split_dim = np.argmax(diff, axis=0)
 
     return result, err, split_dim
+
+
+def gauss_kronrod(
+    f: Callable,
+    centers: NDArray[np.floating],
+    halfwidths: NDArray[np.floating],
+    vol: NDArray[np.floating],
+):
+    # # abscissae of the 15-point kronrod rule
+    # xgk = np.array(
+    #     [
+    #         0.991455371120812639206854697526329,
+    #         0.949107912342758524526189684047851,
+    #         0.864864423359769072789712788640926,
+    #         0.741531185599394439863864773280788,
+    #         0.586087235467691130294144838258730,
+    #         0.405845151377397166906606412076961,
+    #         0.207784955007898467600689403773245,
+    #         0.000000000000000000000000000000000,
+    #     ]
+    # )
+    # # /* xgk[1], xgk[3], ... abscissae of the 7-point gauss rule.
+    # #    xgk[0], xgk[2], ... to optimally extend the 7-point gauss rule */
+
+    # # /* weights of the 7-point gauss rule */
+    # wg = np.array(
+    #     [
+    #         0.129484966168869693270611432679082,
+    #         0.279705391489276667901467771423780,
+    #         0.381830050505118944950369775488975,
+    #         0.417959183673469387755102040816327,
+    #     ]
+    # )
+    # # /* weights of the 15-point kronrod rule */
+    # wgk = np.array(
+    #     [
+    #         0.022935322010529224963732008058970,
+    #         0.063092092629978553290700663189204,
+    #         0.104790010322250183839876322541518,
+    #         0.140653259715525918745189590510238,
+    #         0.169004726639267902826583426598550,
+    #         0.190350578064785409913256402421014,
+    #         0.204432940075298892414161999234649,
+    #         0.209482141084727828012999174891714,
+    #     ]
+    # )
+
+    pass
