@@ -1,6 +1,6 @@
 import numpy as np
 
-from cubepy.rules import genz_malik
+from cubepy.genz_malik import genz_malik
 
 # def test_genz_malik():
 

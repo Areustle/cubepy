@@ -42,7 +42,7 @@ def exact_ellipsoid(axes):
 @pytest.mark.xfail(reason="Not implemented")
 def test_brick():
 
-    assert cubepy.integrate(integrand_brick, 0, 1) == exact_brick(1)
+    assert cubepy.integrate(integrand_brick, 0.0, 1.0) == exact_brick(1)
 
 
 if __name__ == "__main__":

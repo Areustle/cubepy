@@ -1,40 +1,80 @@
+# BSD 3-Clause License
+#
+# Copyright (c) 2021, Alex Reustle
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+from __future__ import annotations
+
 import itertools
+from typing import Callable
 
 import numpy as np
 
+# from numpy.typing import NDArray
+from .type_aliases import NPF
 
-def num_k0k1(dim):
+
+def num_k0k1(dim: int) -> int:
     return 1 + 4 * dim
 
 
-def num_k2(dim):
+def num_k2(dim: int) -> int:
     return 2 * dim * (dim - 1)
 
 
-def num_k6(dim):
+def num_k6(dim: int) -> int:
     return 1 << dim
 
 
-def num_points(dim, full=False):
-    if full:
-        return (
+def num_points(dim: int) -> int:
+    return num_k0k1(dim) + num_k2(dim) + num_k6(dim)
+
+
+def num_points_full(dim: int) -> tuple[int, ...]:
+    return tuple(
+        [
             num_k0k1(dim) + num_k2(dim) + num_k6(dim),
             num_k0k1(dim),
             num_k0k1(dim) + num_k2(dim),
-        )
-    else:
-        return num_k0k1(dim) + num_k2(dim) + num_k6(dim)
+        ]
+    )
 
 
-# p shape [ domain_dim, regions, points ]
-def full_kn(c, numf):
+# p shape [ domain_dim, points, ...]
+def full_kn(c: NPF, numf: Callable) -> NPF:
     dim = c.shape[0]
-    _shape = tuple(filter(None, (dim, numf(c.shape[0]), *c.shape[1:])))
+    s = [dim, numf(c.shape[0]), *c.shape[1:]]
+    _shape: tuple = tuple(filter(None, s))
     return np.full(_shape, c[:, None, ...])
 
 
 # Center points in full sym(lambda2, 0, ... ,0) & full sym(lambda3=lambda4, 0, ..., 0)
-def pts_k0k1(c, r1, r2, p=None):
+def pts_k0k1(c: NPF, r1: NPF, r2: NPF, p: NPF | None = None) -> NPF:
 
     p = full_kn(c, num_k0k1) if p is None else p
 
@@ -49,7 +89,7 @@ def pts_k0k1(c, r1, r2, p=None):
 
 
 # Center points for full sym(lambda4, lambda4, 0, ...,0)
-def pts_k2(c, r, p=None):
+def pts_k2(c: NPF, r: NPF, p: NPF | None = None) -> NPF:
 
     p = full_kn(c, num_k2) if p is None else p
     dim = p.shape[0]
@@ -74,7 +114,7 @@ def pts_k2(c, r, p=None):
 
 
 # Center points for full sym(lambda5, ...,  lambda5)
-def pts_k6(c, r, p=None):
+def pts_k6(c: NPF, r: NPF, p: NPF | None = None) -> NPF:
 
     p = full_kn(c, num_k6) if p is None else p
     t = np.array(list(itertools.product([-1, 1], repeat=p.shape[0]))).T
@@ -84,13 +124,48 @@ def pts_k6(c, r, p=None):
     return p
 
 
-def fullsym(c, l2, l4, l5):
+def fullsym(c: NPF, l2: NPF, l4: NPF, l5: NPF) -> NPF:
 
-    p = full_kn(c, num_points)
-    _, d1, d2 = num_points(p.shape[0], full=True)
+    p: NPF = full_kn(c, num_points)
+    _, d1, d2 = num_points_full(p.shape[0])
 
     pts_k0k1(c, l2, l4, p=p[:, 0:d1, ...])
     pts_k2(c, l4, p=p[:, d1:d2, ...])
     pts_k6(c, l5, p=p[:, d2:, ...])
+
+    return p
+
+
+def gk_pts(c: NPF, h: NPF) -> NPF:
+
+    xg = np.array(
+        [
+            0.949107912342758524526189684047851,
+            0.741531185599394439863864773280788,
+            0.405845151377397166906606412076961,
+        ]
+    )
+    xk = np.array(
+        [
+            0.991455371120812639206854697526329,
+            0.864864423359769072789712788640926,
+            0.586087235467691130294144838258730,
+            0.207784955007898467600689403773245,
+        ]
+    )
+
+    c = np.asarray(c)
+    h = np.asarray(h)
+
+    p = np.zeros((15, *c.shape), dtype=c.dtype)
+    p[0, ...] = c
+
+    hg = np.multiply.outer(xg, h)
+    p[1:7:2, ...] = c - hg
+    p[2:7:2, ...] = c + hg
+
+    hk = np.multiply.outer(xk, h)
+    p[7::2, ...] = c - hk
+    p[8::2, ...] = c + hk
 
     return p

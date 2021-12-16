@@ -30,22 +30,57 @@
 
 from __future__ import annotations
 
-from typing import Callable
-
 import numpy as np
 
-from . import genz_malik, region
 from .type_aliases import NPF, NPI
 
-__all__ = ["integrate"]
+__all__ = ["region"]
 
 
-def integrate(f: Callable, low: NPF | float, high: NPF | float) -> tuple[NPF, NPF, NPI]:
+def volume(h: NPF) -> NPF:
+    return np.asarray(np.prod(2 * h, axis=0))
 
-    low = np.asarray(low)
-    high = np.asarray(high)
 
-    centers, halfwidths, volumes = region.region(low, high)
-    result, error, split_dim = genz_malik.genz_malik(f, centers, halfwidths, volumes)
+def region(low: NPF, high: NPF) -> tuple[NPF, ...]:
+    """Compute the hyper-rectangular region parameters from given limits of integration."""
 
-    return result, error, split_dim
+    # {low, high}.shape [ domain_dim, events ]
+    # centers.shape     [ domain_dim, events, 1(regions) ]
+    # halfwidth.shape   [ domain_dim, events, 1(regions) ]
+    # vol.shape         [ domain_dim, events ]
+
+    # if low.ndim <= 1:
+    #     low.reshape(1, *low.shape)
+    # if high.ndim <= 1:
+    #     high.reshape(1, *high.shape)
+
+    if low.shape != high.shape:
+        raise RuntimeError("Vector limits of integration must be equivalent.")
+
+    centers = (high + low) / 2.0
+    halfwidth = (high - low) / 2.0
+    vol = volume(halfwidth)
+
+    return np.expand_dims(centers, -1), np.expand_dims(halfwidth, -1), vol
+
+
+def split(centers: NPF, halfwidth: NPF, volumes: NPF, split_dim: NPI, axis=-1):
+
+    # centers.shape   [ domain_dim, events, regions ]
+    # split_dim.shape [ events, regions ]
+
+    if np.amin(split_dim) < 0 or np.amax(split_dim) > (centers.ndim - 1):
+        IndexError("split dimension invalid")
+
+    halfwidth[split_dim] /= 2.0
+    volumes /= 2.0
+
+    c2 = np.copy(centers)
+    centers[split_dim] -= halfwidth[split_dim]
+    c2[split_dim] += halfwidth[split_dim]
+
+    centers = np.stack((centers, c2), axis=axis)
+    halfwidth = np.stack((halfwidth, halfwidth), axis=axis)
+    volumes = np.stack((volumes, volumes), axis=axis)
+
+    return centers, halfwidth, volumes
