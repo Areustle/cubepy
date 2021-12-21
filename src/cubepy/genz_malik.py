@@ -113,20 +113,24 @@ def genz_malik(
         vals = np.expand_dims(vals, 0)
 
     vc = vals[:, 0:1, ...]  # center integrand value. shape = [ rdim, 1, evt, reg ]
-    v0 = vals[:, 1:d1:4, ...]  # [ range_dim, domain_dim, events, regions ]
-    v1 = vals[:, 2:d1:4, ...]  # [ range_dim, domain_dim, events, regions ]
-    v2 = vals[:, 3:d1:4, ...]  # [ range_dim, domain_dim, events, regions ]
-    v3 = vals[:, 4:d1:4, ...]  # [ range_dim, domain_dim, events, regions ]
+    # v0 = vals[:, 1:d1:4, ...]  # [ range_dim, domain_dim, events, regions ]
+    # v1 = vals[:, 2:d1:4, ...]  # [ range_dim, domain_dim, events, regions ]
+    # v2 = vals[:, 3:d1:4, ...]  # [ range_dim, domain_dim, events, regions ]
+    # v3 = vals[:, 4:d1:4, ...]  # [ range_dim, domain_dim, events, regions ]
 
-    fdiff = np.abs(v0 + v1 - 2 * vc - ratio * (v2 + v3 - 2 * vc))
+    # [ range_dim, domain_dim, events, regions ]
+    v01 = vals[:, 1:d1:4, ...] + vals[:, 2:d1:4, ...]
+    v23 = vals[:, 3:d1:4, ...] + vals[:, 4:d1:4, ...]
+
+    # fdiff = np.abs(v0 + v1 - 2 * vc - ratio * (v2 + v3 - 2 * vc))
+    fdiff = np.abs(v01 - 2 * vc - ratio * (v23 - 2 * vc))
     diff = np.sum(fdiff, axis=0)  # [ domain_dim, events, regions ]
 
-    s2 = np.sum(v0 + v1, axis=1)  # [ range_dim, events, regions ]
-    s3 = np.sum(v2 + v3, axis=1)  # [ range_dim, events, regions ]
+    vc = np.squeeze(vc, 1)
+    s2 = np.sum(v01, axis=1)  # [ range_dim, events, regions ]
+    s3 = np.sum(v23, axis=1)  # [ range_dim, events, regions ]
     s4 = np.sum(vals[:, d1:d3, ...], axis=1)  # [ range_dim, events, regions ]
     s5 = np.sum(vals[:, d3:, ...], axis=1)  # [ range_dim, events, regions ]
-
-    vc = np.squeeze(vc, 1)
 
     w = gez_malik_weights(dim)  # [5]
     wE = gez_malik_err_weights(dim)  # [4]

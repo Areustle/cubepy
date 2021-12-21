@@ -30,22 +30,98 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 
-from . import genz_malik, region
-from .type_aliases import NPF, NPI
+from . import converged, region
+from .gauss_kronrod import gauss_kronrod
+from .genz_malik import genz_malik
+from .type_aliases import NPF
 
 __all__ = ["integrate"]
 
 
-def integrate(f: Callable, low: NPF | float, high: NPF | float) -> tuple[NPF, NPF, NPI]:
+def integrate(
+    f: Callable,
+    low: NPF | float,
+    high: NPF | float,
+    args: tuple[Any, ...] = tuple([]),
+    abstol: float = 1e-5,
+    reltol: float = 1e-5,
+    itermax: int | float = 50,
+    **kwargs
+) -> tuple[NPF, NPF]:
 
+    # Prepare parameters
     low = np.asarray(low)
     high = np.asarray(high)
 
-    centers, halfwidths, volumes = region.region(low, high)
-    result, error, split_dim = genz_malik.genz_malik(f, centers, halfwidths, volumes)
+    norm = "inf" if "norm" not in kwargs else kwargs["norm"]
 
-    return result, error, split_dim
+    def _f(x: NPF):
+        return f(x, *args)
+
+    # :::::::::::::::: Shapes ::::::::::::::::::
+    # {low, high}       [ domain_dim, events ]
+    # {center, hwidth}  [ domain_dim, 1(regions), events ]
+    # {volume}          [ 1(regions), events ]
+    # ---------------- Results -----------------
+    # {value}       [ range_dim, regions, events ]
+    # {error}       [ range_dim, regions, events ]
+    # {split_dim}   [ regions, events ]
+    #
+    # {cmask}   [ regions, events ]
+
+    # perform initial rule application
+    center, hwidth, vol = region.region(low, high)
+
+    def rule1d(c: NPF, h: NPF, _):
+        return gauss_kronrod(_f, c, h)
+
+    def rulend(c: NPF, h: NPF, v: NPF):
+        return genz_malik(_f, c, h, v)
+
+    rule = rule1d if center.shape[0] == 1 else rulend
+
+    value, error, split_dim = rule(center, hwidth, vol)
+
+    # prepare results
+    if value.shape != error.shape:
+        # expect [range_dim, regions, events]
+        raise RuntimeError("Value/Error shape mismatch after rule application")
+
+    # [range_dim, events]
+    result_value = np.zeros(value.shape[:2])
+    result_error = np.zeros(value.shape[:2])
+    # converge_msk = np.ones(value.shape[:2], dtype=bool)
+
+    iter = 1
+    while np.any(iter < int(itermax)):
+
+        # cmask.shape [ regions, events ]
+        cmask = converged.converged(value, error, abstol, reltol, norm)
+
+        # shape [range_dim, regions, events]
+        result_value += np.sum(value[..., cmask], axis=-1)
+        result_error += np.sum(error[..., cmask], axis=-1)
+
+        # nmask.shape [ regions, events ]
+        nmask = ~cmask
+
+        if not np.any(nmask):
+            break
+
+        # {center, hwidth}  [ domain_dim, regions, events ]
+        center, hwidth, vol = center[:, nmask], hwidth[:, nmask], vol[nmask]
+        split_dim = split_dim[:, nmask]
+
+        center, hwidth, vol = region.split(center, hwidth, vol, split_dim)
+        value, error, split_dim = rule(center, hwidth, vol)
+
+        iter += 1
+
+    if iter == int(itermax):
+        raise RuntimeError("Failed to converge within the iteration limit.")
+
+    return np.sum(result_value, axis=0), np.sum(result_error, axis=0)

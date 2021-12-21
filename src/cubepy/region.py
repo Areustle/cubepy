@@ -37,50 +37,55 @@ from .type_aliases import NPF, NPI
 __all__ = ["region"]
 
 
-def volume(h: NPF) -> NPF:
-    return np.asarray(np.prod(2 * h, axis=0))
-
-
 def region(low: NPF, high: NPF) -> tuple[NPF, ...]:
     """Compute the hyper-rectangular region parameters from given limits of integration."""
 
+    # :::::::::::::::: Shapes ::::::::::::::::::
     # {low, high}.shape [ domain_dim, events ]
-    # centers.shape     [ domain_dim, events, 1(regions) ]
-    # halfwidth.shape   [ domain_dim, events, 1(regions) ]
-    # vol.shape         [ domain_dim, events ]
-
-    # if low.ndim <= 1:
-    #     low.reshape(1, *low.shape)
-    # if high.ndim <= 1:
-    #     high.reshape(1, *high.shape)
+    # centers.shape     [ domain_dim, 1(regions), events ]
+    # halfwidth.shape   [ domain_dim, 1(regions), events ]
+    # vol.shape         [ 1(regions), events ]
 
     if low.shape != high.shape:
         raise RuntimeError("Vector limits of integration must be equivalent.")
 
-    centers = (high + low) / 2.0
-    halfwidth = (high - low) / 2.0
-    vol = volume(halfwidth)
+    if low.ndim == 1:
+        low = np.expand_dims(low, 0)
+        high = np.expand_dims(high, 0)
 
-    return np.expand_dims(centers, -1), np.expand_dims(halfwidth, -1), vol
+    if low.ndim != 2:
+        raise RuntimeError("Input limits shape not supported.")
+
+    centers = (high + low) * 0.5
+    halfwidth = (high - low) * 0.5
+    vol = np.prod(2 * halfwidth, axis=0)
+
+    # centers.shape     [ domain_dim, 1(regions), events ]
+    # halfwidth.shape   [ domain_dim, 1(regions), events ]
+    # vol.shape         [ 1(regions), events ]
+    return (
+        np.expand_dims(centers, 1),
+        np.expand_dims(halfwidth, 1),
+        np.expand_dims(vol, 1),
+    )
 
 
-def split(centers: NPF, halfwidth: NPF, volumes: NPF, split_dim: NPI, axis=-1):
+def split(centers: NPF, halfwidth: NPF, volumes: NPF, split_dim: NPI):
 
-    # centers.shape   [ domain_dim, events, regions ]
-    # split_dim.shape [ events, regions ]
-
+    # centers.shape   [ domain_dim, regions, events ]
+    # split_dim.shape [ regions, events ]
     if np.amin(split_dim) < 0 or np.amax(split_dim) > (centers.ndim - 1):
-        IndexError("split dimension invalid")
+        raise IndexError("split dimension invalid")
 
-    halfwidth[split_dim] /= 2.0
-    volumes /= 2.0
+    halfwidth[split_dim] /= 2
+    volumes /= 2
 
     c2 = np.copy(centers)
     centers[split_dim] -= halfwidth[split_dim]
     c2[split_dim] += halfwidth[split_dim]
 
-    centers = np.stack((centers, c2), axis=axis)
-    halfwidth = np.stack((halfwidth, halfwidth), axis=axis)
-    volumes = np.stack((volumes, volumes), axis=axis)
+    centers = np.concatenate((centers, c2), axis=-1)
+    halfwidth = np.concatenate((halfwidth, halfwidth), axis=-1)
+    volumes = np.concatenate((volumes, volumes), axis=-1)
 
     return centers, halfwidth, volumes

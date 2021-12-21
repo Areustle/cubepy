@@ -38,9 +38,7 @@ from . import points
 from .type_aliases import NPF, NPI
 
 
-def gauss_kronrod(
-    f: Callable, centers: NPF, halfwidths: NPF
-) -> tuple[NPF, NPF, NPI | int]:
+def gauss_kronrod(f: Callable, centers: NPF, halfwidths: NPF) -> tuple[NPF, NPF, NPI]:
 
     # weights of the 7-point gauss rule
     wg = np.array(
@@ -122,4 +120,4 @@ def gauss_kronrod(
     msk = ra > (np.finfo(rk.dtype).min / min_err)
     err[msk & (min_err > err)] = min_err
 
-    return rk * halfwidths, err, 0
+    return rk * halfwidths, err, np.zeros_like(err, dtype=int)

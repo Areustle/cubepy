@@ -6,8 +6,8 @@ import pytest
 import cubepy
 
 
-def integrand_brick(_):
-    return 1.0
+def integrand_brick(x):
+    return np.ones_like(x)
 
 
 def integrand_sphere(x):
@@ -21,9 +21,9 @@ def integrand_ellipsoid(x, a, b, c):
 
 
 def integrand_ellipsoid_v(x, r):
-    rho = np.array(x[:, 0])
-    # phi = np.array(x[:, 1])
-    theta = np.array(x[:, 2])
+    rho = np.asarray(x[0])
+    # phi = np.array(x[1])
+    theta = np.asarray(x[2])
     return np.prod(r, axis=0) * rho ** 2 * np.sin(theta)
 
 

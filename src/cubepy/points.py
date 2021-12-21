@@ -30,7 +30,7 @@
 
 from __future__ import annotations
 
-import itertools
+from itertools import product
 from typing import Callable
 
 import numpy as np
@@ -117,7 +117,7 @@ def pts_k2(c: NPF, r: NPF, p: NPF | None = None) -> NPF:
 def pts_k6(c: NPF, r: NPF, p: NPF | None = None) -> NPF:
 
     p = full_kn(c, num_k6) if p is None else p
-    t = np.array(list(itertools.product([-1, 1], repeat=p.shape[0]))).T
+    t = np.array(list(product([-1, 1], repeat=p.shape[0]))).T
     # # p += r[:, None, ...] * t[..., None, None]
     for i in range(p.shape[0]):
         p[i] += np.multiply.outer(t[i], r[i])
@@ -154,18 +154,20 @@ def gk_pts(c: NPF, h: NPF) -> NPF:
         ]
     )
 
+    # {c, h}  [ 1(domain_dim), regions, events ]
     c = np.asarray(c)
     h = np.asarray(h)
 
-    p = np.zeros((15, *c.shape), dtype=c.dtype)
-    p[0, ...] = c
+    # {p}  [ 1(domain_dim), points, regions, events ]
+    p = np.zeros((c.shape[0], 15, *c.shape[1:]), dtype=c.dtype)
+    p[:, 0, ...] = c
 
     hg = np.multiply.outer(xg, h)
-    p[1:7:2, ...] = c - hg
-    p[2:7:2, ...] = c + hg
+    p[:, 1:7:2, ...] = c - hg
+    p[:, 2:7:2, ...] = c + hg
 
     hk = np.multiply.outer(xk, h)
-    p[7::2, ...] = c - hk
-    p[8::2, ...] = c + hk
+    p[:, 7::2, ...] = c - hk
+    p[:, 8::2, ...] = c + hk
 
     return p

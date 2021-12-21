@@ -177,106 +177,106 @@ def test_fullsym():
 #     assert np.all(points.fullsym(np.zeros((4, 1, 1)), v1, 2 * v1, v1) == v)
 
 
-def test_gk_pts():
+# def test_gk_pts():
 
-    c = np.zeros(1)
-    h = np.ones(1) * 0.5
+#     c = np.zeros(1)
+#     h = np.ones(1) * 0.5
 
-    gk = points.gk_pts(c, h)
+#     gk = points.gk_pts(c, h)
 
-    assert not np.all(gk == 0)
-    assert np.all(gk[1::2] == -gk[2::2])
+#     assert not np.all(gk == 0)
+#     assert np.all(gk[1::2] == -gk[2::2])
 
-    xgk = np.array(
-        [
-            0.991455371120812639206854697526329,
-            0.949107912342758524526189684047851,
-            0.864864423359769072789712788640926,
-            0.741531185599394439863864773280788,
-            0.586087235467691130294144838258730,
-            0.405845151377397166906606412076961,
-            0.207784955007898467600689403773245,
-        ]
-    )
+#     xgk = np.array(
+#         [
+#             0.991455371120812639206854697526329,
+#             0.949107912342758524526189684047851,
+#             0.864864423359769072789712788640926,
+#             0.741531185599394439863864773280788,
+#             0.586087235467691130294144838258730,
+#             0.405845151377397166906606412076961,
+#             0.207784955007898467600689403773245,
+#         ]
+#     )
 
-    p = np.empty((15, *c.shape), dtype=c.dtype)
-    p[0, ...] = c
+#     p = np.empty((15, *c.shape), dtype=c.dtype)
+#     p[0, ...] = c
 
-    # j = 0, 1, 2
-    # j2 = 1, 3, 5
-    w = np.multiply.outer(xgk, h)
-    p[1, ...] = c - w[1, ...]
-    p[2, ...] = c + w[1, ...]
-    p[3, ...] = c - w[3, ...]
-    p[4, ...] = c + w[3, ...]
-    p[5, ...] = c - w[5, ...]
-    p[6, ...] = c + w[5, ...]
+#     # j = 0, 1, 2
+#     # j2 = 1, 3, 5
+#     w = np.multiply.outer(xgk, h)
+#     p[1, ...] = c - w[1, ...]
+#     p[2, ...] = c + w[1, ...]
+#     p[3, ...] = c - w[3, ...]
+#     p[4, ...] = c + w[3, ...]
+#     p[5, ...] = c - w[5, ...]
+#     p[6, ...] = c + w[5, ...]
 
-    # j = 0, 1, 2, 3
-    # j2 = 0, 2, 4, 6
-    p[7, ...] = c - w[0, ...]
-    p[8, ...] = c + w[0, ...]
-    p[9, ...] = c - w[2, ...]
-    p[10, ...] = c + w[2, ...]
-    p[11, ...] = c - w[4, ...]
-    p[12, ...] = c + w[4, ...]
-    p[13, ...] = c - w[6, ...]
-    p[14, ...] = c + w[6, ...]
+#     # j = 0, 1, 2, 3
+#     # j2 = 0, 2, 4, 6
+#     p[7, ...] = c - w[0, ...]
+#     p[8, ...] = c + w[0, ...]
+#     p[9, ...] = c - w[2, ...]
+#     p[10, ...] = c + w[2, ...]
+#     p[11, ...] = c - w[4, ...]
+#     p[12, ...] = c + w[4, ...]
+#     p[13, ...] = c - w[6, ...]
+#     p[14, ...] = c + w[6, ...]
 
-    assert np.all(p == gk)
+#     assert np.all(p == gk)
 
-    c = np.zeros(100)
-    h = np.ones(100) * 0.5
+#     c = np.zeros(100)
+#     h = np.ones(100) * 0.5
 
-    gk = points.gk_pts(c, h)
+#     gk = points.gk_pts(c, h)
 
-    assert not np.all(gk == 0)
-    assert np.all(gk[1::2] == -gk[2::2])
+#     assert not np.all(gk == 0)
+#     assert np.all(gk[1::2] == -gk[2::2])
 
-    p = np.empty((15, *c.shape), dtype=c.dtype)
-    p[0, ...] = c
+#     p = np.empty((15, *c.shape), dtype=c.dtype)
+#     p[0, ...] = c
 
-    # j = 0, 1, 2
-    # j2 = 1, 3, 5
-    w = np.multiply.outer(xgk, h)
-    p[1, ...] = c - w[1, ...]
-    p[2, ...] = c + w[1, ...]
-    p[3, ...] = c - w[3, ...]
-    p[4, ...] = c + w[3, ...]
-    p[5, ...] = c - w[5, ...]
-    p[6, ...] = c + w[5, ...]
+#     # j = 0, 1, 2
+#     # j2 = 1, 3, 5
+#     w = np.multiply.outer(xgk, h)
+#     p[1, ...] = c - w[1, ...]
+#     p[2, ...] = c + w[1, ...]
+#     p[3, ...] = c - w[3, ...]
+#     p[4, ...] = c + w[3, ...]
+#     p[5, ...] = c - w[5, ...]
+#     p[6, ...] = c + w[5, ...]
 
-    # j = 0, 1, 2, 3
-    # j2 = 0, 2, 4, 6
-    p[7, ...] = c - w[0, ...]
-    p[8, ...] = c + w[0, ...]
-    p[9, ...] = c - w[2, ...]
-    p[10, ...] = c + w[2, ...]
-    p[11, ...] = c - w[4, ...]
-    p[12, ...] = c + w[4, ...]
-    p[13, ...] = c - w[6, ...]
-    p[14, ...] = c + w[6, ...]
+#     # j = 0, 1, 2, 3
+#     # j2 = 0, 2, 4, 6
+#     p[7, ...] = c - w[0, ...]
+#     p[8, ...] = c + w[0, ...]
+#     p[9, ...] = c - w[2, ...]
+#     p[10, ...] = c + w[2, ...]
+#     p[11, ...] = c - w[4, ...]
+#     p[12, ...] = c + w[4, ...]
+#     p[13, ...] = c - w[6, ...]
+#     p[14, ...] = c + w[6, ...]
 
-    assert np.all(p == gk)
+#     assert np.all(p == gk)
 
 
-if __name__ == "__main__":
-    np.set_printoptions(linewidth=256)
-    # test_nums()
-    # test_fulls()
-    # test_fullsym()
+# if __name__ == "__main__":
+#     np.set_printoptions(linewidth=256)
+#     # test_nums()
+#     # test_fulls()
+#     # test_fullsym()
 
-    # # [dim, regions, events]
-    # c = np.zeros((3, 5, 6))
-    # h = np.ones((3, 5, 6))
+#     # # [dim, regions, events]
+#     # c = np.zeros((3, 5, 6))
+#     # h = np.ones((3, 5, 6))
 
-    # # [dim, points, regions, events]
-    # # print(points.pts_k0k1(c, h, 2*h))
-    # print(points.pts_k0k1(c, h, 2 * h).shape)
-    # # print(points.pts_k2(c, 2*h))
-    # print(points.pts_k2(c, 2 * h).shape)
-    # # print(points.pts_k6(c, h))
-    # print(points.pts_k6(c, h).shape)
-    # print(points.fullsym(c, h, 2 * h, h).shape)
+#     # # [dim, points, regions, events]
+#     # # print(points.pts_k0k1(c, h, 2*h))
+#     # print(points.pts_k0k1(c, h, 2 * h).shape)
+#     # # print(points.pts_k2(c, 2*h))
+#     # print(points.pts_k2(c, 2 * h).shape)
+#     # # print(points.pts_k6(c, h))
+#     # print(points.pts_k6(c, h).shape)
+#     # print(points.fullsym(c, h, 2 * h, h).shape)
 
-    print(points.gk_pts(np.array([0.0]), np.array([0.5])))
+#     print(points.gk_pts(np.array([0.0]), np.array([0.5])))
