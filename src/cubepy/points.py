@@ -136,38 +136,56 @@ def fullsym(c: NPF, l2: NPF, l4: NPF, l5: NPF) -> NPF:
     return p
 
 
-def gk_pts(c: NPF, h: NPF) -> NPF:
-
-    xg = np.array(
-        [
-            0.949107912342758524526189684047851,
-            0.741531185599394439863864773280788,
-            0.405845151377397166906606412076961,
-        ]
-    )
-    xk = np.array(
-        [
-            0.991455371120812639206854697526329,
-            0.864864423359769072789712788640926,
-            0.586087235467691130294144838258730,
-            0.207784955007898467600689403773245,
-        ]
-    )
+def gk_pts(c: NPF, h: NPF, p: NPF | None = None) -> NPF:
 
     # {c, h}  [ 1(domain_dim), regions, events ]
-    c = np.asarray(c)
-    h = np.asarray(h)
+    if c.ndim != 3 or h.ndim != 3:
+        raise RuntimeError("Domain shape is not 3")
+    if c.shape[0] != 1:
+        raise RuntimeError("Domain dimension is not 1")
+    if h.shape[0] != 1:
+        raise RuntimeError("Domain dimension is not 1")
+
+    # GK [7, 15] node points from
+    # https://www.advanpix.com/2011/11/07/gauss-kronrod-quadrature-nodes-weights/
+    nodes = np.array(
+        [
+            -0.991455371120812639206854697526329,  # 0
+            -0.949107912342758524526189684047851,  # 1
+            -0.864864423359769072789712788640926,  # 2
+            -0.741531185599394439863864773280788,  # 3
+            -0.586087235467691130294144838258730,  # 4
+            -0.405845151377397166906606412076961,  # 5
+            -0.207784955007898467600689403773245,  # 6
+            0.000000000000000000000000000000000,  # 7
+            0.207784955007898467600689403773245,  # 8
+            0.405845151377397166906606412076961,  # 9
+            0.586087235467691130294144838258730,  # 10
+            0.741531185599394439863864773280788,  # 11
+            0.864864423359769072789712788640926,  # 12
+            0.949107912342758524526189684047851,  # 13
+            0.991455371120812639206854697526329,  # 14
+        ]
+    )
+
+    # {c, h}  [ regions, events ]
+    c = np.squeeze(c, 0)
+    h = np.squeeze(h, 0)
+
+    # {p}  [ points, regions, events ]
+    p = c + np.multiply.outer(nodes, h)
 
     # {p}  [ 1(domain_dim), points, regions, events ]
-    p = np.zeros((c.shape[0], 15, *c.shape[1:]), dtype=c.dtype)
-    p[:, 0, ...] = c
+    return np.expand_dims(p, 0)
 
-    hg = np.multiply.outer(xg, h)
-    p[:, 1:7:2, ...] = c - hg
-    p[:, 2:7:2, ...] = c + hg
+    # p = np.zeros((15, *c.shape), dtype=c.dtype)
 
-    hk = np.multiply.outer(xk, h)
-    p[:, 7::2, ...] = c - hk
-    p[:, 8::2, ...] = c + hk
+    # p[0, ...] = c
 
-    return p
+    # hg = np.multiply.outer(xg, h)
+    # p[1:7:2, ...] = c - hg
+    # p[2:7:2, ...] = c + hg
+
+    # hk = np.multiply.outer(xk, h)
+    # p[7::2, ...] = c - hk
+    # p[8::2, ...] = c + hk

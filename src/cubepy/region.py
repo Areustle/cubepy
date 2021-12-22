@@ -31,6 +31,7 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.lib.twodim_base import mask_indices
 
 from .type_aliases import NPF, NPI
 
@@ -73,19 +74,30 @@ def region(low: NPF, high: NPF) -> tuple[NPF, ...]:
 def split(centers: NPF, halfwidth: NPF, volumes: NPF, split_dim: NPI):
 
     # centers.shape   [ domain_dim, regions, events ]
-    # split_dim.shape [ regions, events ]
+    # split_dim.shape [ 1, regions, events ]
+
     if np.amin(split_dim) < 0 or np.amax(split_dim) > (centers.ndim - 1):
         raise IndexError("split dimension invalid")
 
-    halfwidth[split_dim] /= 2
-    volumes /= 2
+    if split_dim.ndim < centers.ndim:
+        split_dim = np.expand_dims(split_dim, 0)
 
+    mask = np.zeros_like(centers, dtype=np.bool_)
+    np.put_along_axis(mask, split_dim, True, 0)
+
+    h = np.copy(halfwidth)
+    h[mask] *= 0.5
+
+    v = np.copy(volumes)
+    v *= 0.5
+
+    c1 = np.copy(centers)
     c2 = np.copy(centers)
-    centers[split_dim] -= halfwidth[split_dim]
-    c2[split_dim] += halfwidth[split_dim]
+    c1[mask] -= h[mask]
+    c2[mask] += h[mask]
 
-    centers = np.concatenate((centers, c2), axis=-1)
-    halfwidth = np.concatenate((halfwidth, halfwidth), axis=-1)
-    volumes = np.concatenate((volumes, volumes), axis=-1)
+    c = np.concatenate((c1, c2), axis=1)
+    h = np.concatenate((h, h), axis=1)
+    v = np.concatenate((v, v), axis=0)
 
-    return centers, halfwidth, volumes
+    return c, h, v
