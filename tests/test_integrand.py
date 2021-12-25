@@ -1,7 +1,4 @@
-from timeit import timeit
-
 import numpy as np
-import pytest
 
 import cubepy
 
@@ -39,16 +36,50 @@ def exact_ellipsoid(axes):
     return (4 / 3) * np.pi * np.prod(axes, axis=0)
 
 
-@pytest.mark.xfail(reason="Not implemented")
 def test_brick():
 
-    assert cubepy.integrate(integrand_brick, 0.0, 1.0) == exact_brick(1)
+    value, error = cubepy.integrate(integrand_brick, np.array([0.0]), np.array([1.0]))
+
+    assert np.allclose(value, exact_brick(1.0))
+
+    print(value, error)
+
+
+def test_multi():
+    def integrand(x):
+        return 1 + 8 * x[0] * x[1]
+
+    def exact(r):
+        return np.prod(r, axis=0)
+
+    low = np.array(
+        [
+            [0.0],
+            [1.0],
+        ]
+    )
+
+    high = np.array(
+        [
+            [3.0],
+            [2.0],
+        ]
+    )
+
+    value, error = cubepy.integrate(integrand, low, high)
+
+    assert np.allclose(value, exact(1.0))
+
+    print(value, error)
 
 
 if __name__ == "__main__":
 
-    N = int(1e8)
-    a = np.ones((4, N, 4))
+    # N = int(1e8)
+    # a = np.ones((4, N, 4))
 
-    print(timeit(lambda: np.prod(a, 0), number=1))
-    print(timeit(lambda: np.prod(a, -1), number=1))
+    # from timeit import timeit
+    # print(timeit(lambda: np.prod(a, 0), number=1))
+    # print(timeit(lambda: np.prod(a, -1), number=1))
+
+    test_multi()
