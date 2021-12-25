@@ -31,11 +31,10 @@
 from __future__ import annotations
 
 import numpy as np
-from numpy.lib.twodim_base import mask_indices
 
 from .type_aliases import NPF, NPI
 
-__all__ = ["region"]
+__all__ = ["region", "split"]
 
 
 def region(low: NPF, high: NPF) -> tuple[NPF, ...]:
@@ -67,7 +66,7 @@ def region(low: NPF, high: NPF) -> tuple[NPF, ...]:
     return (
         np.expand_dims(centers, 1),
         np.expand_dims(halfwidth, 1),
-        np.expand_dims(vol, 1),
+        np.expand_dims(vol, 0),
     )
 
 

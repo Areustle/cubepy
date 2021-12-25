@@ -35,7 +35,6 @@ from typing import Callable
 
 import numpy as np
 
-# from numpy.typing import NDArray
 from .type_aliases import NPF
 
 

@@ -44,20 +44,22 @@ __all__ = ["integrate"]
 
 def integrate(
     f: Callable,
-    low: NPF | float,
-    high: NPF | float,
+    low: NPF,
+    high: NPF,
     args: tuple[Any, ...] = tuple([]),
     abstol: float = 1e-5,
     reltol: float = 1e-5,
     itermax: int | float = 50,
-    **kwargs
 ) -> tuple[NPF, NPF]:
 
     # Prepare parameters
-    low = np.asarray(low)
-    high = np.asarray(high)
+    # low = np.asarray(low)
+    # high = np.asarray(high)
 
-    norm = "inf" if "norm" not in kwargs else kwargs["norm"]
+    if low.ndim == 1:
+        low = np.expand_dims(low, 0)
+    if high.ndim == 1:
+        high = np.expand_dims(high, 0)
 
     def _f(x: NPF):
         return f(x, *args)
@@ -73,17 +75,20 @@ def integrate(
     #
     # {cmask}   [ regions, events ]
 
-    # perform initial rule application
+    # Create initial region
     center, hwidth, vol = region.region(low, high)
 
-    def rule1d(c: NPF, h: NPF, _):
-        return gauss_kronrod(_f, c, h)
+    if center.shape[0] == 1:
 
-    def rulend(c: NPF, h: NPF, v: NPF):
-        return genz_malik(_f, c, h, v)
+        def rule(c: NPF, h: NPF, v: NPF):
+            return gauss_kronrod(_f, c, h, v)
 
-    rule = rule1d if center.shape[0] == 1 else rulend
+    else:
 
+        def rule(c: NPF, h: NPF, v: NPF):
+            return genz_malik(_f, c, h, v)
+
+    # perform initial rule application
     value, error, split_dim = rule(center, hwidth, vol)
 
     # prepare results
@@ -100,20 +105,23 @@ def integrate(
     while np.any(iter < int(itermax)):
 
         # cmask.shape [ regions, events ]
-        cmask = converged.converged(value, error, abstol, reltol, norm)
+        cmask = converged.converged(value, error, abstol, reltol)
 
         # shape [range_dim, regions, events]
         result_value += np.sum(value[..., cmask], axis=-1)
         result_error += np.sum(error[..., cmask], axis=-1)
 
+        if np.all(cmask):
+            break
+
         # nmask.shape [ regions, events ]
         nmask = ~cmask
 
-        if not np.any(nmask):
-            break
-
         # {center, hwidth}  [ domain_dim, regions, events ]
-        center, hwidth, vol = center[:, nmask], hwidth[:, nmask], vol[nmask]
+        center = center[:, nmask]
+        hwidth = hwidth[:, nmask]
+        vol = vol[nmask]
+
         split_dim = split_dim[:, nmask]
 
         center, hwidth, vol = region.split(center, hwidth, vol, split_dim)

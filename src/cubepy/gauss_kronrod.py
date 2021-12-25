@@ -38,7 +38,30 @@ from . import points
 from .type_aliases import NPF, NPI
 
 
-def gauss_kronrod(f: Callable, centers: NPF, halfwidths: NPF) -> tuple[NPF, NPF, NPI]:
+def gauss_kronrod(
+    f: Callable, centers: NPF, halfwidths: NPF, v: NPF
+) -> tuple[NPF, NPF, NPI]:
+
+    if centers.ndim != 3:
+        raise ValueError("Invalid Centers Order. Expected 3, got ", centers.ndim)
+    if halfwidths.ndim != 3:
+        raise ValueError("Invalid widths Order. Expected 3, got ", halfwidths.ndim)
+    if v.ndim != 2:
+        raise ValueError("Invalid volume Order. Expected 2, got ", v.ndim)
+    if centers.shape != halfwidths.shape:
+        raise ValueError(
+            "Invalid Region NDArray shapes, expected centers and "
+            "halfwidths to be idendically shaped, but got ",
+            centers.shape,
+            halfwidths.shape,
+        )
+    if centers.shape[1:] != v.shape:
+        raise ValueError(
+            "Invalid Region NDArray shapes, expected centers and "
+            "vol to share lower 2 dimension shapes, but got ",
+            centers.shape[1:],
+            v.shape,
+        )
 
     # GK [7, 15] weights from
     # https://www.advanpix.com/2011/11/07/gauss-kronrod-quadrature-nodes-weights/
@@ -81,22 +104,22 @@ def gauss_kronrod(f: Callable, centers: NPF, halfwidths: NPF) -> tuple[NPF, NPF,
     vals = f(p)
 
     # r_.shape [ range_dim, regions, events ]
-    rg: NPF = np.tensordot(vals[:, 1::2, ...], gl_weights, (0, 1))
-    rk: NPF = np.tensordot(vals, gk_weights, (0, 1))
-    rabs: NPF = np.tensordot(np.abs(vals), gk_weights, (0, 1)) * halfwidths
+    rg: NPF = np.tensordot(gl_weights, vals[:, 1::2, ...], (0, 1))
+    rk: NPF = np.tensordot(gk_weights, vals, (0, 1))
 
     # error
     err = np.abs(rk - rg) * halfwidths
+    # print(rk * halfwidths, rg * halfwidths, err)
     mean = 0.5 * rk
-    rasc: NPF = np.tensordot(np.abs(vals - mean), gk_weights, (0, 1)) * halfwidths
+    I_tilde = np.tensordot(gk_weights, np.abs(vals - mean), (0, 1)) * halfwidths
 
-    msk = (rasc != 0) & (err != 0)
-    scale = (200.0 * err[msk] / rasc[msk]) ** 1.5
-    scale[scale < 1] = 1.0
-    err[msk] = rasc[msk] * scale
+    mask = np.abs(I_tilde) > 1.0e-15
+    scale = (200.0 * err[mask] / I_tilde[mask]) ** 1.5
+    scale[scale > 1.0] = 1.0
+    err[mask] = I_tilde[mask] * scale
 
     min_err = 50.0 * np.finfo(rk.dtype).eps
-    msk = rabs > (np.finfo(rk.dtype).min / min_err)
-    err[msk & (min_err > err)] = min_err
+    rabs = np.tensordot(gk_weights, np.abs(vals), (0, 1)) * halfwidths
+    err[(rabs > (np.finfo(rk.dtype).tiny / min_err)) & (min_err > err)] = min_err
 
     return (rk * halfwidths), err, np.zeros_like(err, dtype=int)
