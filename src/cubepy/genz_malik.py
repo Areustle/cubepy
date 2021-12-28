@@ -43,9 +43,9 @@ def genz_malik_weights(dim: int) -> NPF:
     return np.array(
         [
             (12824.0 - 9120.0 * dim + 400.0 * dim ** 2) / 19683.0,
-            980.0 / 6561.0,
+            0.149367474470355128791342783112330437433318091754305746075293,  # 980/6561
             (1820.0 - 400.0 * dim) / 19683.0,
-            200.0 / 19683.0,
+            0.010161052685058172026621958034852410709749530051313316059543,  # 200/19683
             (6859.0 / 19683.0) / 2 ** dim,
         ]
     )
@@ -56,9 +56,9 @@ def genz_malik_err_weights(dim: int) -> NPF:
     return np.array(
         [
             (729.0 - 950.0 * dim + 50.0 * dim ** 2) / 729.0,
-            245.0 / 486.0,
+            0.50411522633744855967078189300411522633744855967078189300411522,  # 245/486
             (265.0 - 100.0 * dim) / 1458.0,
-            25.0 / 729.0,
+            0.034293552812071330589849108367626886145404663923182441700960219,  # 25/729
         ]
     )
 
@@ -87,20 +87,18 @@ def genz_malik(
     #     )
 
     ### [7, 5] FS rule weights from Genz, Malik: "An adaptive algorithm for numerical
-    ### integration Over an N-dimensional rectangular region"
-    ### alpha2 = sqrt(9/70), alpha4 = sqrt(9/10), alpha5 = sqrt(9/19)
-    ### ratio = (alpha2 ** 2) / (alpha4 ** 2)
-    alpha2 = 0.35856858280031809199064515390793749545406372969943071
-    alpha4 = 0.94868329805051379959966806332981556011586654179756505
-    alpha5 = 0.68824720161168529772162873429362352512689535661564885
-    ratio = 0.14285714285714285714285714285714285714285714285714281
-
-    width_alpha2 = halfwidths * alpha2
-    width_alpha4 = halfwidths * alpha4
-    width_alpha5 = halfwidths * alpha5
+    ### integration Over an N-dimensional rectangular region", updated by Bernstein,
+    ### Espelid, Genz in "An Adaptive Algorithm for the Approximate Calculation of
+    ### Multiple Integrals"
+    alpha2 = 0.35856858280031809199064515390793749545406372969943071  # √(9/70)
+    alpha4 = 0.94868329805051379959966806332981556011586654179756505  # √(9/10)
+    alpha5 = 0.68824720161168529772162873429362352512689535661564885  # √(9/19)
+    ratio = 0.14285714285714285714285714285714285714285714285714281  # ⍺₂² / ⍺₄²
 
     # p shape [ domain_dim, points, ... ]
-    p = points.fullsym(centers, width_alpha2, width_alpha4, width_alpha5)
+    p = points.fullsym(
+        centers, halfwidths * alpha2, halfwidths * alpha4, halfwidths * alpha5
+    )
     dim = p.shape[0]
     d1 = points.num_k0k1(dim)
     d2 = points.num_k2(dim)
@@ -112,14 +110,13 @@ def genz_malik(
     if vals.ndim <= 2:
         vals = np.expand_dims(vals, 0)
 
-    print(vals.shape)
-
     vc = vals[:, 0:1, ...]  # center integrand value. shape = [ rdim, 1, ... ]
 
     # [ range_dim, domain_dim, ... ]
     v01 = vals[:, 1:d1:4, ...] + vals[:, 2:d1:4, ...]
     v23 = vals[:, 3:d1:4, ...] + vals[:, 4:d1:4, ...]
 
+    # Compute the 4th divided difference to determine dimension on which to split.
     # fdiff = np.abs(v0 + v1 - 2 * vc - ratio * (v2 + v3 - 2 * vc))
     fdiff = np.abs(v01 - 2 * vc - ratio * (v23 - 2 * vc))
     diff = np.sum(fdiff, axis=0)  # [ domain_dim, ... ]

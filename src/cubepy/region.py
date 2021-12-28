@@ -74,10 +74,10 @@ def region(low: NPF, high: NPF) -> tuple[NPF, ...]:
 
 def split(centers: NPF, halfwidth: NPF, volumes: NPF, split_dim: NPI):
 
-    # centers.shape   [ domain_dim, regions, events ]
-    # split_dim.shape [ 1, regions, events ]
+    # centers.shape   [ domain_dim, regions_events ]
+    # split_dim.shape [ 1, regions_events ]
 
-    if np.amin(split_dim) < 0 or np.amax(split_dim) > (centers.ndim - 1):
+    if np.amin(split_dim) < 0 or np.amax(split_dim) >= (centers.shape[0]):
         raise IndexError("split dimension invalid")
 
     if split_dim.ndim < centers.ndim:

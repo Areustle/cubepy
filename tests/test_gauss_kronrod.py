@@ -36,9 +36,6 @@ def test_quadratic():
 
     c, h, v = cp.region.region(low, high)
 
-    assert c.shape == (1, 1, 100)
-    assert h.shape == (1, 1, 100)
-    assert v.shape == (1, 100)
     val, err, spd = cp.gauss_kronrod.gauss_kronrod(quadratic, c, h, v)
     assert np.allclose(val, exact_quadratic(low, high))
     assert np.all(err < 1e-13)
@@ -80,9 +77,6 @@ def test_polynomial():
 
     c, h, v = cp.region.region(low, high)
 
-    assert c.shape == (1, 1, 100)
-    assert h.shape == (1, 1, 100)
-    assert v.shape == (1, 100)
     val, err, spd = cp.gauss_kronrod.gauss_kronrod(poly, c, h, v)
     assert np.allclose(val, exact_poly(low, high))
     assert np.all(err < 1e-8)
@@ -126,9 +120,6 @@ def test_high_polynomial():
 
     c, h, v = cp.region.region(low, high)
 
-    assert c.shape == (1, 1, 100)
-    assert h.shape == (1, 1, 100)
-    assert v.shape == (1, 100)
     value, error, split_dim = cp.gauss_kronrod.gauss_kronrod(poly, c, h, v)
     assert np.allclose(value, exact_poly(low, high))
     assert value.shape == error.shape
@@ -140,18 +131,6 @@ if __name__ == "__main__":
 
     def quadratic(x):
         return x ** 2
-
-    #     low = np.array(
-    #         [
-    #             [-1.0],
-    #         ]
-    #     )
-
-    #     high = np.array(
-    #         [
-    #             [1.0],
-    #         ]
-    #     )
 
     center, hwidth, vol = cp.region.region(np.asarray([-1.0]), np.asarray([1.0]))
 

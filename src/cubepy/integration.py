@@ -47,15 +47,14 @@ def integrate(
     low: NPF,
     high: NPF,
     args: tuple[Any, ...] = tuple([]),
-    abstol: float = 1e-2,
-    reltol: float = 1e-2,
+    abstol: float = 1e-6,
+    reltol: float = 1e-6,
     itermax: int | float = 100,
 ) -> tuple[NPF, NPF]:
 
-    # Prepare parameters
+    ### Prepare parameters
     # low = np.asarray(low)
     # high = np.asarray(high)
-
     if low.ndim == 1:
         low = np.expand_dims(low, 0)
     if high.ndim == 1:
@@ -71,15 +70,17 @@ def integrate(
     # {low, high}       [ domain_dim, events ]
     # {center, hwidth}  [ domain_dim, regions_events ]
     # {volume}          [ regions_events ]
+
     # ---------------- Results -----------------
     # {value}       [ range_dim, regions_events ]
     # {error}       [ range_dim, regions_events ]
     # {split_dim}   [ regions_events ]
-    #
+
+    # ------------ Working vectors -------------
     # {cmask}   [ regions_events ]
 
     # Create initial region
-    center, hwidth, vol = region.region(low, high)
+    center, halfwidth, vol = region.region(low, high)
 
     if center.shape[0] == 1:
 
@@ -92,28 +93,31 @@ def integrate(
             return genz_malik(_f, c, h, v)
 
     # perform initial rule application
-    value, error, split_dim = rule(center, hwidth, vol)
+    value, error, split_dim = rule(center, halfwidth, vol)
 
     # prepare results
     if value.shape != error.shape:
         # expect [range_dim, regions_events]
         raise RuntimeError("Value/Error shape mismatch after rule application")
 
+    range_dim = value.shape[0]
+
     # [range_dim, events]
-    result_value = np.zeros((value.shape[0], num_evts))
-    result_error = np.zeros((value.shape[0], num_evts))
+    result_value = np.zeros((range_dim, num_evts))
+    result_error = np.zeros((range_dim, num_evts))
 
     iter = 1
     while np.any(iter < int(itermax)):
 
-        print(iter, center, split_dim)
-
         # cmask.shape [ regions_events ]
+        # Determine which regions are converged
         cmask = converged.converged(value, error, abstol, reltol)
 
-        # shape [range_dim, regions_events ]
-        result_value[:, evtidx[cmask]] += value[:, cmask]
-        result_error[:, evtidx[cmask]] += error[:, cmask]
+        ## shape [ range_dim, regions_events ]
+        ## Accumulate converged region results into correct event
+        for i in range(range_dim):
+            result_value[i, :] += np.bincount(evtidx[cmask], value[i, cmask], num_evts)
+            result_error[i, :] += np.bincount(evtidx[cmask], error[i, cmask], num_evts)
 
         if np.all(cmask):
             break
@@ -121,17 +125,18 @@ def integrate(
         ## nmask.shape [ regions_events ]
         nmask = ~cmask
 
-        center, hwidth, vol = region.split(
-            center[:, nmask], hwidth[:, nmask], vol[nmask], split_dim[nmask]
+        center, halfwidth, vol = region.split(
+            center[:, nmask], halfwidth[:, nmask], vol[nmask], split_dim[nmask]
         )
 
         evtidx = np.tile(evtidx[nmask], 2)
 
-        value, error, split_dim = rule(center, hwidth, vol)
+        value, error, split_dim = rule(center, halfwidth, vol)
 
         iter += 1
 
     if iter == int(itermax):
         raise RuntimeError("Failed to converge within the iteration limit: ", itermax)
 
-    return np.sum(result_value, axis=0), np.sum(result_error, axis=0)
+    # return np.sum(result_value, axis=0), np.sum(result_error, axis=0)
+    return result_value, result_error

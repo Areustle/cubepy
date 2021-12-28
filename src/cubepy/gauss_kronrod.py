@@ -42,26 +42,26 @@ def gauss_kronrod(
     f: Callable, centers: NPF, halfwidths: NPF, v: NPF
 ) -> tuple[NPF, NPF, NPI]:
 
-    if centers.ndim != 3:
-        raise ValueError("Invalid Centers Order. Expected 3, got ", centers.ndim)
-    if halfwidths.ndim != 3:
-        raise ValueError("Invalid widths Order. Expected 3, got ", halfwidths.ndim)
-    if v.ndim != 2:
-        raise ValueError("Invalid volume Order. Expected 2, got ", v.ndim)
-    if centers.shape != halfwidths.shape:
-        raise ValueError(
-            "Invalid Region NDArray shapes, expected centers and "
-            "halfwidths to be idendically shaped, but got ",
-            centers.shape,
-            halfwidths.shape,
-        )
-    if centers.shape[1:] != v.shape:
-        raise ValueError(
-            "Invalid Region NDArray shapes, expected centers and "
-            "vol to share lower 2 dimension shapes, but got ",
-            centers.shape[1:],
-            v.shape,
-        )
+    # if centers.ndim != 3:
+    #     raise ValueError("Invalid Centers Order. Expected 3, got ", centers.ndim)
+    # if halfwidths.ndim != 3:
+    #     raise ValueError("Invalid widths Order. Expected 3, got ", halfwidths.ndim)
+    # if v.ndim != 2:
+    #     raise ValueError("Invalid volume Order. Expected 2, got ", v.ndim)
+    # if centers.shape != halfwidths.shape:
+    #     raise ValueError(
+    #         "Invalid Region NDArray shapes, expected centers and "
+    #         "halfwidths to be idendically shaped, but got ",
+    #         centers.shape,
+    #         halfwidths.shape,
+    #     )
+    # if centers.shape[1:] != v.shape:
+    #     raise ValueError(
+    #         "Invalid Region NDArray shapes, expected centers and "
+    #         "vol to share lower 2 dimension shapes, but got ",
+    #         centers.shape[1:],
+    #         v.shape,
+    #     )
 
     # GK [7, 15] weights from
     # https://www.advanpix.com/2011/11/07/gauss-kronrod-quadrature-nodes-weights/

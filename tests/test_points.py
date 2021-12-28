@@ -220,25 +220,3 @@ def test_gk_pts():
     assert gk[:, 12, ...] == c + w[2, ...]
     assert gk[:, 13, ...] == c + w[1, ...]
     assert gk[:, 14, ...] == c + w[0, ...]
-
-
-# if __name__ == "__main__":
-# np.set_printoptions(linewidth=256)
-# # test_nums()
-# # test_fulls()
-# # test_fullsym()
-
-# # # [dim, regions, events]
-# # c = np.zeros((3, 5, 6))
-# # h = np.ones((3, 5, 6))
-
-# # # [dim, points, regions, events]
-# # # print(points.pts_k0k1(c, h, 2*h))
-# # print(points.pts_k0k1(c, h, 2 * h).shape)
-# # # print(points.pts_k2(c, 2*h))
-# # print(points.pts_k2(c, 2 * h).shape)
-# # # print(points.pts_k6(c, h))
-# # print(points.pts_k6(c, h).shape)
-# # print(points.fullsym(c, h, 2 * h, h).shape)
-
-# print(points.gk_pts(np.array([0.0]), np.array([0.5])))
