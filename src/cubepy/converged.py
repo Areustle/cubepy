@@ -38,9 +38,9 @@ from .type_aliases import NPB, NPF
 def converged(result: NPF, error: NPF, abstol: float, reltol: float) -> NPB:
     """Determine wether error values are below threshod for convergence."""
 
-    # {val, err}    [ range_dim, events, regions ]
+    # {val, err}    [ range_dim, events_regions ]
     val = np.linalg.norm(result, ord=np.inf, axis=0)
     err = np.linalg.norm(error, ord=np.inf, axis=0)
 
-    # {cmask}       [ events, regions ]
+    # {cmask}       [ events_regions ]
     return (err <= abstol) | (err <= (reltol * np.abs(val)))

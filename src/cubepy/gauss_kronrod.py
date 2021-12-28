@@ -97,21 +97,20 @@ def gauss_kronrod(
         ]
     )
 
-    # p.shape [ 15(points), regions, events ]
+    # p.shape [ 15(points), ... ]
     p = points.gk_pts(centers, halfwidths)
 
-    # vals.shape [ range_dim, points, regions, events ]
+    # vals.shape [ range_dim, points, ... ]
     vals = f(p)
 
-    # r_.shape [ range_dim, regions, events ]
+    # r_.shape [ range_dim, ... ]
     rg: NPF = np.tensordot(gl_weights, vals[:, 1::2, ...], (0, 1))
     rk: NPF = np.tensordot(gk_weights, vals, (0, 1))
 
     # error
-    err = np.abs(rk - rg) * halfwidths
-    # print(rk * halfwidths, rg * halfwidths, err)
+    err = halfwidths * np.abs(rk - rg)
     mean = 0.5 * rk
-    I_tilde = np.tensordot(gk_weights, np.abs(vals - mean), (0, 1)) * halfwidths
+    I_tilde = halfwidths * np.tensordot(gk_weights, np.abs(vals - mean), (0, 1))
 
     mask = np.abs(I_tilde) > 1.0e-15
     scale = (200.0 * err[mask] / I_tilde[mask]) ** 1.5
@@ -119,7 +118,7 @@ def gauss_kronrod(
     err[mask] = I_tilde[mask] * scale
 
     min_err = 50.0 * np.finfo(rk.dtype).eps
-    rabs = np.tensordot(gk_weights, np.abs(vals), (0, 1)) * halfwidths
+    rabs = halfwidths * np.tensordot(gk_weights, np.abs(vals), (0, 1))
     err[(rabs > (np.finfo(rk.dtype).tiny / min_err)) & (min_err > err)] = min_err
 
     return (rk * halfwidths), err, np.zeros_like(err, dtype=int)

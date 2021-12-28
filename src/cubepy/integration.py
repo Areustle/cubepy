@@ -47,9 +47,9 @@ def integrate(
     low: NPF,
     high: NPF,
     args: tuple[Any, ...] = tuple([]),
-    abstol: float = 1e-5,
-    reltol: float = 1e-5,
-    itermax: int | float = 50,
+    abstol: float = 1e-2,
+    reltol: float = 1e-2,
+    itermax: int | float = 100,
 ) -> tuple[NPF, NPF]:
 
     # Prepare parameters
@@ -61,19 +61,22 @@ def integrate(
     if high.ndim == 1:
         high = np.expand_dims(high, 0)
 
+    num_evts = low.shape[-1]
+    evtidx = np.arange(num_evts)
+
     def _f(x: NPF):
         return f(x, *args)
 
     # :::::::::::::::: Shapes ::::::::::::::::::
     # {low, high}       [ domain_dim, events ]
-    # {center, hwidth}  [ domain_dim, 1(regions), events ]
-    # {volume}          [ 1(regions), events ]
+    # {center, hwidth}  [ domain_dim, regions_events ]
+    # {volume}          [ regions_events ]
     # ---------------- Results -----------------
-    # {value}       [ range_dim, regions, events ]
-    # {error}       [ range_dim, regions, events ]
-    # {split_dim}   [ regions, events ]
+    # {value}       [ range_dim, regions_events ]
+    # {error}       [ range_dim, regions_events ]
+    # {split_dim}   [ regions_events ]
     #
-    # {cmask}   [ regions, events ]
+    # {cmask}   [ regions_events ]
 
     # Create initial region
     center, hwidth, vol = region.region(low, high)
@@ -93,43 +96,42 @@ def integrate(
 
     # prepare results
     if value.shape != error.shape:
-        # expect [range_dim, regions, events]
+        # expect [range_dim, regions_events]
         raise RuntimeError("Value/Error shape mismatch after rule application")
 
     # [range_dim, events]
-    result_value = np.zeros(value.shape[:2])
-    result_error = np.zeros(value.shape[:2])
-    # converge_msk = np.ones(value.shape[:2], dtype=bool)
+    result_value = np.zeros((value.shape[0], num_evts))
+    result_error = np.zeros((value.shape[0], num_evts))
 
     iter = 1
     while np.any(iter < int(itermax)):
 
-        # cmask.shape [ regions, events ]
+        print(iter, center, split_dim)
+
+        # cmask.shape [ regions_events ]
         cmask = converged.converged(value, error, abstol, reltol)
 
-        # shape [range_dim, regions, events]
-        result_value += np.sum(value[..., cmask], axis=-1)
-        result_error += np.sum(error[..., cmask], axis=-1)
+        # shape [range_dim, regions_events ]
+        result_value[:, evtidx[cmask]] += value[:, cmask]
+        result_error[:, evtidx[cmask]] += error[:, cmask]
 
         if np.all(cmask):
             break
 
-        # nmask.shape [ regions, events ]
+        ## nmask.shape [ regions_events ]
         nmask = ~cmask
 
-        # {center, hwidth}  [ domain_dim, regions, events ]
-        center = center[:, nmask]
-        hwidth = hwidth[:, nmask]
-        vol = vol[nmask]
+        center, hwidth, vol = region.split(
+            center[:, nmask], hwidth[:, nmask], vol[nmask], split_dim[nmask]
+        )
 
-        split_dim = split_dim[:, nmask]
+        evtidx = np.tile(evtidx[nmask], 2)
 
-        center, hwidth, vol = region.split(center, hwidth, vol, split_dim)
         value, error, split_dim = rule(center, hwidth, vol)
 
         iter += 1
 
     if iter == int(itermax):
-        raise RuntimeError("Failed to converge within the iteration limit.")
+        raise RuntimeError("Failed to converge within the iteration limit: ", itermax)
 
     return np.sum(result_value, axis=0), np.sum(result_error, axis=0)

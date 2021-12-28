@@ -39,25 +39,25 @@ from .type_aliases import *
 
 
 @cache
-def gez_malik_weights(dim: int) -> NPF:
+def genz_malik_weights(dim: int) -> NPF:
     return np.array(
         [
-            (12824.0 - 9120.0 * dim + 400.0 * np.sqrt(dim)) / 19683.0,
+            (12824.0 - 9120.0 * dim + 400.0 * dim ** 2) / 19683.0,
             980.0 / 6561.0,
             (1820.0 - 400.0 * dim) / 19683.0,
             200.0 / 19683.0,
-            6859.0 / 19683.0 / 2 ** dim,
+            (6859.0 / 19683.0) / 2 ** dim,
         ]
     )
 
 
 @cache
-def gez_malik_err_weights(dim: int) -> NPF:
+def genz_malik_err_weights(dim: int) -> NPF:
     return np.array(
         [
-            729.0 - 950.0 * dim + 50.0 * np.sqrt(dim) / 729.0,
+            (729.0 - 950.0 * dim + 50.0 * dim ** 2) / 729.0,
             245.0 / 486.0,
-            265.0 - 100.0 * dim / 1458.0,
+            (265.0 - 100.0 * dim) / 1458.0,
             25.0 / 729.0,
         ]
     )
@@ -67,29 +67,29 @@ def genz_malik(
     f: Callable, centers: NPF, halfwidths: NPF, volumes: NPF
 ) -> tuple[NPF, NPF, NPI]:
 
-    if centers.ndim != 3:
-        raise ValueError("Invalid Centers Order. Expected 3, got ", centers.ndim)
-    if halfwidths.ndim != 3:
-        raise ValueError("Invalid widths Order. Expected 3, got ", halfwidths.ndim)
-    if volumes.ndim != 2:
-        raise ValueError("Invalid volume Order. Expected 2, got ", volumes.ndim)
-    if centers.shape != halfwidths.shape:
-        raise ValueError(
-            "Invalid Region NDArray shapes, expected centers and "
-            "halfwidths to be idendically shaped, but got ",
-            centers.shape,
-            halfwidths.shape,
-        )
-    if centers.shape[1:] != volumes.shape:
-        raise ValueError(
-            "Invalid Region NDArray shapes, expected centers and "
-            "vol to share lower 2 dimension shapes, but got ",
-            centers.shape[1:],
-            volumes.shape,
-        )
+    # if centers.ndim == 1:
+    #     raise ValueError("Invalid Centers ndim. Expected more than 1")
+    # if halfwidths.ndim == 1:
+    #     raise ValueError("Invalid halfwidths ndim. Expected more than 1")
+    # if centers.shape != halfwidths.shape:
+    #     raise ValueError(
+    #         "Invalid Region NDArray shapes, expected centers and "
+    #         "halfwidths to be idendically shaped, but got ",
+    #         centers.shape,
+    #         halfwidths.shape,
+    #     )
+    # if centers.shape[1:] != volumes.shape:
+    #     raise ValueError(
+    #         "Invalid Region NDArray shapes, expected centers and "
+    #         "vol to share lower 2 dimension shapes, but got ",
+    #         centers.shape[1:],
+    #         volumes.shape,
+    #     )
 
-    # alpha2 = sqrt(9/70), alpha4 = sqrt(9/10), alpha5 = sqrt(9/19)
-    # ratio = (alpha2 ** 2) / (alpha4 ** 2)
+    ### [7, 5] FS rule weights from Genz, Malik: "An adaptive algorithm for numerical
+    ### integration Over an N-dimensional rectangular region"
+    ### alpha2 = sqrt(9/70), alpha4 = sqrt(9/10), alpha5 = sqrt(9/19)
+    ### ratio = (alpha2 ** 2) / (alpha4 ** 2)
     alpha2 = 0.35856858280031809199064515390793749545406372969943071
     alpha4 = 0.94868329805051379959966806332981556011586654179756505
     alpha5 = 0.68824720161168529772162873429362352512689535661564885
@@ -99,48 +99,50 @@ def genz_malik(
     width_alpha4 = halfwidths * alpha4
     width_alpha5 = halfwidths * alpha5
 
-    # p shape [ domain_dim, points, regions, events ]
+    # p shape [ domain_dim, points, ... ]
     p = points.fullsym(centers, width_alpha2, width_alpha4, width_alpha5)
     dim = p.shape[0]
     d1 = points.num_k0k1(dim)
     d2 = points.num_k2(dim)
     d3 = d1 + d2
 
-    # vals shape [ range_dim, points, regions, events ]
+    # vals shape [ range_dim, points, ... ]
     vals = f(p)
 
-    if vals.ndim == 3:
+    if vals.ndim <= 2:
         vals = np.expand_dims(vals, 0)
 
-    vc = vals[:, 0:1, ...]  # center integrand value. shape = [ rdim, 1, reg, evt ]
+    print(vals.shape)
 
-    # [ range_dim, domain_dim, regions, events ]
+    vc = vals[:, 0:1, ...]  # center integrand value. shape = [ rdim, 1, ... ]
+
+    # [ range_dim, domain_dim, ... ]
     v01 = vals[:, 1:d1:4, ...] + vals[:, 2:d1:4, ...]
     v23 = vals[:, 3:d1:4, ...] + vals[:, 4:d1:4, ...]
 
     # fdiff = np.abs(v0 + v1 - 2 * vc - ratio * (v2 + v3 - 2 * vc))
     fdiff = np.abs(v01 - 2 * vc - ratio * (v23 - 2 * vc))
-    diff = np.sum(fdiff, axis=0)  # [ domain_dim, regions, events ]
+    diff = np.sum(fdiff, axis=0)  # [ domain_dim, ... ]
 
     vc = np.squeeze(vc, 1)
-    s2 = np.sum(v01, axis=1)  # [ range_dim, regions, events ]
-    s3 = np.sum(v23, axis=1)  # [ range_dim, regions, events ]
-    s4 = np.sum(vals[:, d1:d3, ...], axis=1)  # [ range_dim, regions, events ]
-    s5 = np.sum(vals[:, d3:, ...], axis=1)  # [ range_dim, regions, events ]
+    s2 = np.sum(v01, axis=1)  # [ range_dim, ... ]
+    s3 = np.sum(v23, axis=1)  # [ range_dim, ... ]
+    s4 = np.sum(vals[:, d1:d3, ...], axis=1)  # [ range_dim, ... ]
+    s5 = np.sum(vals[:, d3:, ...], axis=1)  # [ range_dim, ... ]
 
-    w = gez_malik_weights(dim)  # [5]
-    wE = gez_malik_err_weights(dim)  # [4]
+    w = genz_malik_weights(dim)  # [5]
+    wE = genz_malik_err_weights(dim)  # [4]
 
-    # [5].[5,range_dim, regions, events ] = [range_dim, regions, events ]
+    # [5] . [5,range_dim, ... ] = [range_dim, ... ]
     result = volumes * np.tensordot(w, (vc, s2, s3, s4, s5), (0, 0))
 
-    # [4].[4,range_dim, regions, events ] = [range_dim, regions, events ]
+    # [4] . [4,range_dim, ... ] = [range_dim, ... ]
     res5th = volumes * np.tensordot(wE, (vc, s2, s3, s4), (0, 0))
 
-    err = np.abs(res5th - result)  # [range_dim, regions, events ]
+    err = np.abs(res5th - result)  # [range_dim, ... ]
 
     # determine split dimension
-    split_dim = np.argmax(diff, axis=0)  # [ regions, events ]
+    split_dim = np.argmax(diff, axis=0)  # [ ... ]
     split_i = np.zeros_like(diff, dtype=np.bool_)
     np.put_along_axis(split_i, np.expand_dims(split_dim, 0), True, axis=0)
 
@@ -148,8 +150,8 @@ def genz_malik(
     widest_i = np.zeros_like(halfwidths, dtype=np.bool_)
     np.put_along_axis(widest_i, np.expand_dims(widest_dim, 0), True, axis=0)
 
-    delta = diff[split_i] - diff[widest_i]  # [ regions, events ]
-    df = np.sum(err, axis=0) / (volumes * 10 ** dim)  # [ regions, events ]
+    delta = np.reshape(diff[split_i] - diff[widest_i], diff.shape[1:])  # [ ... ]
+    df = np.sum(err, axis=0) / (volumes * 10 ** dim)  # [ ... ]
     too_close = delta <= df
     split_dim[too_close] = widest_dim[too_close]
 

@@ -137,13 +137,13 @@ def fullsym(c: NPF, l2: NPF, l4: NPF, l5: NPF) -> NPF:
 
 def gk_pts(c: NPF, h: NPF, p: NPF | None = None) -> NPF:
 
-    # {c, h}  [ 1(domain_dim), regions, events ]
-    if c.ndim != 3 or h.ndim != 3:
-        raise RuntimeError("Domain shape is not 3")
-    if c.shape[0] != 1:
-        raise RuntimeError("Domain dimension is not 1")
-    if h.shape[0] != 1:
-        raise RuntimeError("Domain dimension is not 1")
+    # # {c, h}  [ 1(domain_dim), regions, events ]
+    # if c.ndim != 3 or h.ndim != 3:
+    #     raise RuntimeError("Domain shape is not 3")
+    # if c.shape[0] != 1:
+    #     raise RuntimeError("Domain dimension is not 1")
+    # if h.shape[0] != 1:
+    #     raise RuntimeError("Domain dimension is not 1")
 
     # GK [7, 15] node points from
     # https://www.advanpix.com/2011/11/07/gauss-kronrod-quadrature-nodes-weights/
@@ -176,15 +176,3 @@ def gk_pts(c: NPF, h: NPF, p: NPF | None = None) -> NPF:
 
     # {p}  [ 1(domain_dim), points, regions, events ]
     return np.expand_dims(p, 0)
-
-    # p = np.zeros((15, *c.shape), dtype=c.dtype)
-
-    # p[0, ...] = c
-
-    # hg = np.multiply.outer(xg, h)
-    # p[1:7:2, ...] = c - hg
-    # p[2:7:2, ...] = c + hg
-
-    # hk = np.multiply.outer(xk, h)
-    # p[7::2, ...] = c - hk
-    # p[8::2, ...] = c + hk
