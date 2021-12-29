@@ -1,6 +1,12 @@
+from __future__ import annotations
+
+from itertools import product
+from typing import Callable
+
 import numpy as np
 
 from cubepy import points
+from cubepy.type_aliases import NPF
 
 
 def test_nums():
@@ -162,20 +168,6 @@ def test_fullsym():
         assert points.fullsym(c, h, 2.0 * h, h).shape == (i, n, 5, 6, 7)
 
 
-#     v1 = np.ones((4))
-
-#     v = np.concatenate(
-#         (
-#             points.pts_k0k1(np.zeros((4)), v1, 2 * v1),
-#             points.pts_k2(np.zeros((4)), 2 * v1),
-#             points.pts_k6(np.zeros((4)), v1),
-#         ),
-#         axis=-1,
-#     )
-
-#     assert np.all(points.fullsym(np.zeros((4, 1, 1)), v1, 2 * v1, v1) == v)
-
-
 def test_gk_pts():
 
     c = np.zeros((1, 1, 1))
@@ -220,3 +212,92 @@ def test_gk_pts():
     assert gk[:, 12, ...] == c + w[2, ...]
     assert gk[:, 13, ...] == c + w[1, ...]
     assert gk[:, 14, ...] == c + w[0, ...]
+
+
+# Center points in full sym(lambda2, 0, ... ,0) & full sym(lambda3=lambda4, 0, ..., 0)
+def pts_k0k1(p: NPF, r1: float, r2: float) -> NPF:
+
+    for i in range(p.shape[0]):
+        j = 4 * i
+        p[i, j + 1 : j + 5] = [-r1, r1, -r2, r2]
+
+    return p
+
+
+# Center points for full sym(lambda4, lambda4, 0, ...,0)
+def pts_k2(p: NPF, r: float) -> NPF:
+
+    dim = p.shape[0]
+    k = 0
+
+    for i in range(dim - 1):
+        for j in range(i + 1, dim):
+            p[i, k] -= r
+            p[j, k] -= r
+            k += 1
+            p[i, k] += r
+            p[j, k] -= r
+            k += 1
+            p[i, k] -= r
+            p[j, k] += r
+            k += 1
+            p[i, k] += r
+            p[j, k] += r
+            k += 1
+
+    return p
+
+
+# Center points for full sym(lambda5, ...,  lambda5)
+def pts_k6(p: NPF, r: float) -> NPF:
+    t = np.array(list(product([-1, 1], repeat=p.shape[0]))).T
+    p += r * t
+    return p
+
+
+def fullsym(domain_dim: int, l2: float, l4: float, l5: float):
+    p = np.zeros((domain_dim, points.num_points(domain_dim)))
+    _, d1, d2 = points.num_points_full(domain_dim)
+    pts_k0k1(p[:, :d1], l2, l4)
+    pts_k2(p[:, d1:d2], l4)
+    pts_k6(p[:, d2:], l5)
+
+    return p
+
+
+def new_points(c, h, l2, l4, l5):
+    p = fullsym(c.shape[0], l2, l4, l5)
+    hp = p[..., None] * h[:, None]
+    chp = c[:, None, :] + hp
+    return chp
+
+
+def old_points(c, h, l2, l4, l5):
+    p = points.fullsym(c, h * l2, h * l4, h * l5)
+    return p
+
+
+def run():
+    alpha2 = 0.35856858280031809199064515390793749545406372969943071  # √(9/70)
+    alpha4 = 0.94868329805051379959966806332981556011586654179756505  # √(9/10)
+    alpha5 = 0.68824720161168529772162873429362352512689535661564885  # √(9/19)
+    c = np.zeros((8, 100000))
+    h = 9.0 * np.ones((8, 100000))
+    new_points(c, h, alpha2, alpha4, alpha5)
+    old_points(c, h, alpha2, alpha4, alpha5)
+
+
+if __name__ == "__main__":
+    np.set_printoptions(linewidth=512)
+    run()
+
+    # x = 2.0
+    # y = 6.0
+    # z = 8.0
+
+    # p = fullsym(c.shape[0], x, y, z)
+    # print(p)
+
+    # hp = np.einsum("dp,dr->dpr", p, h)
+    # chp = c[:, None, :] + hp
+    # print(chp)

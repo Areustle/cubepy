@@ -51,22 +51,23 @@ def test_multi():
 
     low = np.array(
         [
-            100 * [0.0],
-            100 * [1.0],
+            100000 * [0.0],
+            100000 * [1.0],
         ]
     )
 
     high = np.array(
         [
-            100 * [3.0],
-            100 * [2.0],
+            100000 * [3.0],
+            100000 * [2.0],
         ]
     )
 
     value, error = cubepy.integrate(integrand, low, high)
+    print(value, error)
 
-    assert np.allclose(value, 57)
-    assert np.all(error < 1e-6)
+    # assert np.allclose(value, 57)
+    # assert np.all(error < 1e-6)
 
 
 def test_van_dooren_de_riddler_simple_1():
@@ -224,3 +225,8 @@ def test_van_dooren_de_riddler_peaked_10():
 
     assert np.allclose(value, 1.436563656918090)
     assert np.all(error < 1e-4)
+
+
+if __name__ == "__main__":
+    test_multi()
+    test_van_dooren_de_riddler_peaked_10()

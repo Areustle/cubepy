@@ -113,8 +113,8 @@ def integrate(
         # Determine which regions are converged
         cmask = converged.converged(value, error, abstol, reltol)
 
-        ## shape [ range_dim, regions_events ]
-        ## Accumulate converged region results into correct event
+        # shape [ range_dim, regions_events ]
+        # Accumulate converged region results into correct event
         for i in range(range_dim):
             result_value[i, :] += np.bincount(evtidx[cmask], value[i, cmask], num_evts)
             result_error[i, :] += np.bincount(evtidx[cmask], error[i, cmask], num_evts)
@@ -122,7 +122,7 @@ def integrate(
         if np.all(cmask):
             break
 
-        ## nmask.shape [ regions_events ]
+        # nmask.shape [ regions_events ]
         nmask = ~cmask
 
         center, halfwidth, vol = region.split(
@@ -130,6 +130,25 @@ def integrate(
         )
 
         evtidx = np.tile(evtidx[nmask], 2)
+
+        # # Buffered iteration over region_events
+        # it = np.nditer(
+        #     [center, halfwidth, vol, None, None, None],
+        #     flags=["external_loop", "buffered"],
+        #     op_flags=[
+        #         ["readonly"],
+        #         ["readonly"],
+        #         ["readonly"],
+        #         ["writeonly", "allocate", "no_broadcast"],
+        #         ["writeonly", "allocate", "no_broadcast"],
+        #         ["writeonly", "allocate", "no_broadcast"],
+        #     ],
+        # )
+        # with it:
+        #     for ci, hi, vi, rv, re, rs in it:
+        #         print("nditer:", ci.shape, hi.shape, vi.shape)
+        #         rv[...], re[...], rs[...] = rule(ci, hi, vi)
+        #     value, error, split_dim = it.operands[3:]
 
         value, error, split_dim = rule(center, halfwidth, vol)
 
