@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .type_aliases import NPB, NPF, NPI
+from .type_aliases import NPF, NPI
 
 __all__ = ["region", "split"]
 
@@ -47,7 +47,9 @@ def region(low: NPF, high: NPF) -> tuple[NPF, ...]:
     # vol.shape         [ regions_events ]
 
     if low.shape != high.shape:
-        raise RuntimeError("Vector limits of integration must be equivalent.")
+        raise RuntimeError(
+            "Vector limits of integration must be equivalent.", low.shape, high.shape
+        )
 
     if low.ndim == 1:
         low = np.expand_dims(low, 0)
@@ -62,15 +64,6 @@ def region(low: NPF, high: NPF) -> tuple[NPF, ...]:
 
     return centers, halfwidth, vol
 
-    # centers.shape     [ domain_dim, 1(regions), events ]
-    # halfwidth.shape   [ domain_dim, 1(regions), events ]
-    # vol.shape         [ 1(regions), events ]
-    # return (
-    #     np.expand_dims(centers, 1),
-    #     np.expand_dims(halfwidth, 1),
-    #     np.expand_dims(vol, 0),
-    # )
-
 
 def split(centers: NPF, halfwidth: NPF, volumes: NPF, split_dim: NPI):
 
@@ -83,16 +76,7 @@ def split(centers: NPF, halfwidth: NPF, volumes: NPF, split_dim: NPI):
     if split_dim.ndim < centers.ndim:
         split_dim = np.expand_dims(split_dim, 0)
 
-    # ## {center, hwidth}  [ domain_dim, (regions, events) ]
-    # centers = centers[:, nmask]
-    # halfwidth = halfwidth[:, nmask]
-    # volumes = volumes[nmask]
-    # split_dim = split_dim[nmask]
-
-    # print("center", center.shape)
-    # print("hwidth", hwidth.shape)
-    # print("vol", vol.shape)
-    # print("split_dim", split_dim.shape)
+    ## {center, hwidth}  [ domain_dim, (regions, events) ]
 
     mask = np.zeros_like(centers, dtype=np.bool_)
     np.put_along_axis(mask, split_dim, True, 0)

@@ -4,20 +4,6 @@ import pytest
 import cubepy
 
 
-def integrand_brick(x):
-    return np.ones_like(x)
-
-
-def integrand_sphere(x):
-    r, _, phi = x
-    return r ** 2 * np.sin(phi)
-
-
-def integrand_ellipsoid(x, a, b, c):
-    rho, _, theta = x
-    return a * b * c * rho ** 2 * np.sin(theta)
-
-
 def integrand_ellipsoid_v(x, r):
     rho = np.asarray(x[0])
     # phi = np.array(x[1])
@@ -25,24 +11,54 @@ def integrand_ellipsoid_v(x, r):
     return np.prod(r, axis=0) * rho ** 2 * np.sin(theta)
 
 
-def exact_brick(r):
-    return np.prod(r, axis=0)
-
-
-def exact_sphere(r):
-    return (4 / 3) * np.pi * r ** 3
-
-
-def exact_ellipsoid(axes):
-    return (4 / 3) * np.pi * np.prod(axes, axis=0)
-
-
 def test_brick():
+    def integrand_brick(x):
+        return np.ones_like(x)
 
-    value, error = cubepy.integrate(integrand_brick, np.array([0.0]), np.array([1.0]))
+    def exact_brick(r):
+        return np.prod(r, axis=0)
 
+    value, error = cubepy.integrate(integrand_brick, 0.0, 1.0)
     assert np.allclose(value, exact_brick(1.0))
     assert np.all(error < 1e-6)
+
+    lo = [0, 0, 0]
+    hi = [1, 2, 3]
+    value, error = cubepy.integrate(integrand_brick, lo, hi, is_1d=False)
+    assert np.allclose(value, exact_brick(hi))
+    assert np.all(error < 1e-6)
+
+
+def test_sphere():
+    def integrand_sphere(x):
+        r, _, phi = x
+        return r ** 2 * np.sin(phi)
+
+    def exact_sphere(r):
+        return (4.0 / 3.0) * np.pi * r ** 3
+
+    value, error = cubepy.integrate(
+        integrand_sphere, [0.0, 0.0, 0.0], [1.0, 2.0 * np.pi, np.pi]
+    )
+
+    assert np.allclose(value, exact_sphere(1.0))
+    assert np.all(error < 1e-5)
+
+
+def test_ellipsoid():
+    def integrand_ellipsoid(x, a, b, c):
+        rho, _, theta = x
+        return a * b * c * rho ** 2 * np.sin(theta)
+
+    def exact_ellipsoid(axes):
+        return (4 / 3) * np.pi * np.prod(axes, axis=0)
+
+    value, error = cubepy.integrate(
+        integrand_ellipsoid, [0.0, 0.0, 0.0], [1.0, 2.0 * np.pi, np.pi], args=(1, 2, 3)
+    )
+
+    assert np.allclose(value, exact_ellipsoid([1, 2, 3]))
+    assert np.all(error < 1e-5)
 
 
 def test_multi():
@@ -51,53 +67,31 @@ def test_multi():
 
     low = np.array(
         [
-            100000 * [0.0],
-            100000 * [1.0],
+            1000000 * [0.0],
+            1000000 * [1.0],
         ]
     )
 
     high = np.array(
         [
-            100000 * [3.0],
-            100000 * [2.0],
+            1000000 * [3.0],
+            1000000 * [2.0],
         ]
     )
 
     value, error = cubepy.integrate(integrand, low, high)
-    print(value, error)
 
-    # assert np.allclose(value, 57)
-    # assert np.all(error < 1e-6)
+    assert np.allclose(value, 57)
+    assert np.all(error < 1e-6)
 
 
 def test_van_dooren_de_riddler_simple_1():
 
-    low = np.array(
-        [
-            [0.0],
-            [0.0],
-            [0.0],
-            [-1.0],
-            [-1.0],
-            [-1.0],
-        ]
-    )
-
-    high = np.array(
-        [
-            [2.0],
-            [1.0],
-            [0.5 * np.pi],
-            [1.0],
-            [1.0],
-            [1.0],
-        ]
-    )
+    lo = np.array([0.0, 0.0, 0.0, -1.0, -1.0, -1.0])
+    hi = np.array([2.0, 1.0, (np.pi / 2.0), 1.0, 1.0, 1.0])
 
     value, error = cubepy.integrate(
-        lambda x: (x[0] * x[1] ** 2 * np.sin(x[2])) / (4 + x[3] + x[4] + x[5]),
-        low,
-        high,
+        lambda x: (x[0] * x[1] ** 2 * np.sin(x[2])) / (4 + x[3] + x[4] + x[5]), lo, hi
     )
 
     assert np.allclose(value, 1.434761888397263)
@@ -108,8 +102,8 @@ def test_van_dooren_de_riddler_simple_2():
 
     value, error = cubepy.integrate(
         lambda x: x[2] ** 2 * x[3] * np.exp(x[2] * x[3]) * (1 + x[0] + x[1]) ** -2,
-        np.expand_dims(np.array([0.0, 0.0, 0.0, 0.0]), 1),
-        np.expand_dims(np.array([1.0, 1.0, 1.0, 2.0]), 1),
+        np.array([0.0, 0.0, 0.0, 0.0]),
+        np.array([1.0, 1.0, 1.0, 2.0]),
     )
 
     assert np.allclose(value, 0.5753641449035616)
@@ -120,8 +114,8 @@ def test_van_dooren_de_riddler_simple_3():
 
     value, error = cubepy.integrate(
         lambda x: 8 / (1 + 2 * (np.sum(x, axis=0))),
-        np.expand_dims(np.array([0.0, 0.0, 0.0]), 1),
-        np.expand_dims(np.array([1.0, 1.0, 1.0]), 1),
+        np.array([0.0, 0.0, 0.0]),
+        np.array([1.0, 1.0, 1.0]),
     )
 
     assert np.allclose(value, 2.152142832595894)
@@ -132,8 +126,8 @@ def test_van_dooren_de_riddler_oscillating_4():
 
     value, error = cubepy.integrate(
         lambda x: np.cos(np.sum(x, axis=0)),
-        np.expand_dims(np.array([0, 0, 0, 0, 0]), 1),
-        np.expand_dims(np.array([np.pi, np.pi, np.pi, np.pi, 0.5 * np.pi]), 1),
+        np.array([0, 0, 0, 0, 0]),
+        np.array([np.pi, np.pi, np.pi, np.pi, 0.5 * np.pi]),
     )
 
     assert np.allclose(value, 16.0)
@@ -143,9 +137,7 @@ def test_van_dooren_de_riddler_oscillating_4():
 def test_van_dooren_de_riddler_oscillating_5():
 
     value, error = cubepy.integrate(
-        lambda x: np.sin(10.0 * x[0]),
-        np.expand_dims(np.array([0, 0, 0, 0]), 1),
-        np.expand_dims(np.array([1, 1, 1, 1]), 1),
+        lambda x: np.sin(10 * x[0]), np.array([0, 0, 0, 0]), np.array([1, 1, 1, 1])
     )
 
     assert np.allclose(value, 0.1839071529076452)
@@ -156,8 +148,8 @@ def test_van_dooren_de_riddler_oscillating_6():
 
     value, error = cubepy.integrate(
         lambda x: np.cos(np.sum(x, axis=0)),
-        np.expand_dims(np.array([0, 0]), 1),
-        np.expand_dims(np.array([3 * np.pi, 3 * np.pi]), 1),
+        np.array([0, 0]),
+        np.array([3 * np.pi, 3 * np.pi]),
     )
 
     assert np.allclose(value, -4)
@@ -168,8 +160,8 @@ def test_van_dooren_de_riddler_peaked_7():
 
     value, error = cubepy.integrate(
         lambda x: np.sum(x, axis=0) ** -2,
-        np.expand_dims(np.array([0, 0, 0]), 1),
-        np.expand_dims(np.array([1, 1, 1]), 1),
+        np.array([0, 0, 0]),
+        np.array([1, 1, 1]),
         abstol=1e-7,
         reltol=1e-7,
     )
@@ -178,49 +170,28 @@ def test_van_dooren_de_riddler_peaked_7():
     assert np.all(error < 1e-4)
 
 
-@pytest.mark.skip("Known bad result")
-def test_van_dooren_de_riddler_peaked_8():
-    def f(v):
-        x = v[0]
-        y = v[1]
-
-        return (605.0 * y) / (
-            (1.0 + 120.0 * (1.0 - y)) * ((1.0 + 120.0 * y)) ** 2
-            + 25.0 * x ** 2 * y ** 2
-        )
-
-    value, error = cubepy.integrate(
-        f,
-        np.expand_dims(np.array([0, 0]), 1),
-        np.expand_dims(np.array([1, 1]), 1),
-    )
-
-    assert np.allclose(value, 1.047591113142868)
-    assert np.all(error < 1e-4)
-
-
 def test_van_dooren_de_riddler_peaked_9():
     def f(v):
         x = v[0]
         y = v[1]
 
-        return np.reciprocal((x ** 2 + 0.0001) * ((y + 0.25) ** 2 + 0.0001))
+        return np.reciprocal((x ** 2 + 1e-4) * ((y + 0.25) ** 2 + 1e-4))
 
-    value, error = cubepy.integrate(
-        f,
-        np.expand_dims(np.array([0, 0]), 1),
-        np.expand_dims(np.array([1, 1]), 1),
-    )
+    value, error = cubepy.integrate(f, [0, 0], [1, 1])
+    assert np.allclose(value, 499.1249442241215)
+    assert np.all(error < 1e-3)
 
+    value, error = cubepy.integrate(f, np.zeros((2, 100)), np.ones((2, 100)))
     assert np.allclose(value, 499.1249442241215)
     assert np.all(error < 1e-3)
 
 
 def test_van_dooren_de_riddler_peaked_10():
+
     value, error = cubepy.integrate(
         lambda v: np.exp(np.abs(np.sum(v, axis=0) - 1)),
-        np.expand_dims(np.array([0, 0]), 1),
-        np.expand_dims(np.array([1, 1]), 1),
+        np.array([0, 0]),
+        np.array([1, 1]),
     )
 
     assert np.allclose(value, 1.436563656918090)

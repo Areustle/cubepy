@@ -44,21 +44,85 @@ __all__ = ["integrate"]
 
 def integrate(
     f: Callable,
-    low: NPF,
-    high: NPF,
+    low,
+    high,
     args: tuple[Any, ...] = tuple([]),
     abstol: float = 1e-6,
     reltol: float = 1e-6,
     itermax: int | float = 100,
+    is_1d: bool = False,
 ) -> tuple[NPF, NPF]:
+    """Numerical Cubature in multiple dimensions.
+
+    Functions with 1D domain use an adaptive Gauss Kronrod Quadrature scheme.
+    Functions with 2+D domain use an adaptive Genz Malik Cubature scheme.
+
+    The adaptive regional subdivision is performed independently for un-converged
+    regions.
+
+    Local convergence is obtained when the global tolerance values exceed a local
+    region's error estimate.
+
+    Global convergence is obtained when all regions are locally converged.
+
+    Parameters
+    ==========
+        f: Callable
+            Integrand function: expected function signature is
+            `f(x: NDArray, *args) -> NDArray`
+            where `x` is the expected vector input, with domain in the leading dimension
+            (`x.shape[0]`)
+        low: float or NDArray
+            The finite integral lower bound. If a 1D vector the default behavior is to
+            treat the length (`shape[0]`) as the domain of integration of 1 event.
+            If a 2D ndarray, the default behavior is to treat the leading dimension
+            (`shape[0]`) as the domain of integration, and the trailing dimension as the
+            set of independent events over which to integrate. This default behavior
+            is controlled by the `event_axis` parameter.
+        high: float or NDArray
+            The finite integral high bound. Behavior is identical to `low` parameter.
+        args: tuple, Optional
+            The function arguments to pass into `f`.
+        abstol: float, Optional
+            Absolute local error tolerance. Default 1e-6
+        reltol: float, Optional
+            Relative local error tolerance. Default 1e-6
+        itermax: int or float, Optional
+            Maximum number of subdivision iterations to perform on the integrand.
+            Default is 100
+    """
 
     ### Prepare parameters
-    # low = np.asarray(low)
-    # high = np.asarray(high)
-    if low.ndim == 1:
+    low = np.asarray(low)
+    high = np.asarray(high)
+
+    if low.shape == ():
         low = np.expand_dims(low, 0)
-    if high.ndim == 1:
+    if high.shape == ():
         high = np.expand_dims(high, 0)
+
+    if low.shape != high.shape:
+        raise RuntimeError(
+            "Limits of integration must be the same shape", low.shape, high.shape
+        )
+
+    input_shape = low.shape
+
+    ## Reshape the limits of integration if necessary. Domain_dim must be along axis 0
+    ## and the final shape for low and high must both be 2D. Ravel trailing dimensions
+    ## and reshape results once complete.
+    if low.ndim == 1:
+        low = np.expand_dims(low, 0 if is_1d else -1)
+        high = np.expand_dims(high, 0 if is_1d else -1)
+    elif low.ndim > 1:
+        if is_1d:
+            low = np.ravel(low).reshape(1, np.prod(input_shape))
+            high = np.ravel(high).reshape(1, np.prod(input_shape))
+        else:
+            low = np.ravel(low).reshape(input_shape[0], np.prod(input_shape[1:]))
+            high = np.ravel(high).reshape(input_shape[0], np.prod(input_shape[1:]))
+    else:
+        raise RuntimeError("Unsupported shape for limits of integration", low.shape)
 
     num_evts = low.shape[-1]
     evtidx = np.arange(num_evts)
@@ -113,7 +177,6 @@ def integrate(
         # Determine which regions are converged
         cmask = converged.converged(value, error, abstol, reltol)
 
-        # shape [ range_dim, regions_events ]
         # Accumulate converged region results into correct event
         for i in range(range_dim):
             result_value[i, :] += np.bincount(evtidx[cmask], value[i, cmask], num_evts)
@@ -124,38 +187,19 @@ def integrate(
 
         # nmask.shape [ regions_events ]
         nmask = ~cmask
-
         center, halfwidth, vol = region.split(
             center[:, nmask], halfwidth[:, nmask], vol[nmask], split_dim[nmask]
         )
-
         evtidx = np.tile(evtidx[nmask], 2)
-
-        # # Buffered iteration over region_events
-        # it = np.nditer(
-        #     [center, halfwidth, vol, None, None, None],
-        #     flags=["external_loop", "buffered"],
-        #     op_flags=[
-        #         ["readonly"],
-        #         ["readonly"],
-        #         ["readonly"],
-        #         ["writeonly", "allocate", "no_broadcast"],
-        #         ["writeonly", "allocate", "no_broadcast"],
-        #         ["writeonly", "allocate", "no_broadcast"],
-        #     ],
-        # )
-        # with it:
-        #     for ci, hi, vi, rv, re, rs in it:
-        #         print("nditer:", ci.shape, hi.shape, vi.shape)
-        #         rv[...], re[...], rs[...] = rule(ci, hi, vi)
-        #     value, error, split_dim = it.operands[3:]
-
         value, error, split_dim = rule(center, halfwidth, vol)
 
         iter += 1
 
     if iter == int(itermax):
         raise RuntimeError("Failed to converge within the iteration limit: ", itermax)
+
+    result_value = np.reshape(result_value, (range_dim, *input_shape[1:]))
+    result_error = np.reshape(result_error, (range_dim, *input_shape[1:]))
 
     # return np.sum(result_value, axis=0), np.sum(result_error, axis=0)
     return result_value, result_error
