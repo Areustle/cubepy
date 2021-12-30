@@ -29,7 +29,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
-from functools import cache
 from typing import Callable
 
 import numpy as np
@@ -38,7 +37,6 @@ from . import points
 from .type_aliases import *
 
 
-@cache
 def genz_malik_weights(dim: int) -> NPF:
     return np.array(
         [
@@ -51,7 +49,6 @@ def genz_malik_weights(dim: int) -> NPF:
     )
 
 
-@cache
 def genz_malik_err_weights(dim: int) -> NPF:
     return np.array(
         [
@@ -66,25 +63,6 @@ def genz_malik_err_weights(dim: int) -> NPF:
 def genz_malik(
     f: Callable, centers: NPF, halfwidths: NPF, volumes: NPF
 ) -> tuple[NPF, NPF, NPI]:
-
-    # if centers.ndim == 1:
-    #     raise ValueError("Invalid Centers ndim. Expected more than 1")
-    # if halfwidths.ndim == 1:
-    #     raise ValueError("Invalid halfwidths ndim. Expected more than 1")
-    # if centers.shape != halfwidths.shape:
-    #     raise ValueError(
-    #         "Invalid Region NDArray shapes, expected centers and "
-    #         "halfwidths to be idendically shaped, but got ",
-    #         centers.shape,
-    #         halfwidths.shape,
-    #     )
-    # if centers.shape[1:] != volumes.shape:
-    #     raise ValueError(
-    #         "Invalid Region NDArray shapes, expected centers and "
-    #         "vol to share lower 2 dimension shapes, but got ",
-    #         centers.shape[1:],
-    #         volumes.shape,
-    #     )
 
     ### [7, 5] FS rule weights from Genz, Malik: "An adaptive algorithm for numerical
     ### integration Over an N-dimensional rectangular region", updated by Bernstein,
@@ -117,7 +95,6 @@ def genz_malik(
     v23 = vals[:, 3:d1:4, ...] + vals[:, 4:d1:4, ...]
 
     # Compute the 4th divided difference to determine dimension on which to split.
-    # fdiff = np.abs(v0 + v1 - 2 * vc - ratio * (v2 + v3 - 2 * vc))
     fdiff = np.abs(v01 - 2 * vc - ratio * (v23 - 2 * vc))
     diff = np.sum(fdiff, axis=0)  # [ domain_dim, ... ]
 

@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = 'src/cubepy/_version.py'
-version_scheme = 'post-release'
+version_scheme = 'python-simplified-semver'
 local_scheme = 'no-local-version'
 parentdir_prefix_version = 'cubepy-'
 
