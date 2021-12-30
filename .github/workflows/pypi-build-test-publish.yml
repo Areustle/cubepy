@@ -8,19 +8,14 @@ on:
 jobs:
 
   build_wheels:
-    name: Build wheel for cp${{ matrix.python }}-${{ matrix.platform_id }}
+    name: Build wheel
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python: [37, 38, 39, 310]
-        include:
-          - os: ubuntu-latest
-            platform_id: manylinux_x86_64
-          - os: macos-latest
-            platform_id: macosx_x86_64
+        os: [ubuntu-latest]
+        python: [310]
 
     steps:
     - uses: actions/checkout@v2
@@ -30,10 +25,9 @@ jobs:
         git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
     - name: Build wheels
-      uses: pypa/cibuildwheel@v2.3.0
-      env:
-        CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
-        CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+      uses: actions/setup-python@v2
+      run: |
+        pip wheel -w wheelhouse . --no-deps
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.2.4
@@ -54,7 +48,7 @@ jobs:
         name: cubepy-gh-pypi-artifact
         path: wheelhouse/
 
-    - name: Publish a Python distribution to PyPI
+    - name: Publish a Wheel distribution to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: __token__

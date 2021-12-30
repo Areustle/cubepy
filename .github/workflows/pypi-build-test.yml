@@ -37,10 +37,9 @@ jobs:
         git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
     - name: Build wheels
-      uses: pypa/cibuildwheel@v2.3.0
-      env:
-        CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
-        CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+      uses: actions/setup-python@v2
+      run: |
+        pip wheel -w wheelhouse . --no-deps
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.2.4
