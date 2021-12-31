@@ -111,11 +111,12 @@ def slant_depth(
     )
 
 
-N = int(1e7)
-a = np.zeros(N)
-b = np.ones(N)
-t = np.linspace(0.0, 40.0, N)
+if __name__ == "__main__":
+    N = int(1e7)
+    a = np.zeros(N)
+    b = np.ones(N)
+    t = np.linspace(0.0, 40.0, N)
 
-v, e = slant_depth(a, b, t)
-# print(v.shape, e.shape)
-print(v, e)
+    v, e = slant_depth(a, b, t)
+    # print(v.shape, e.shape)
+    print(v, e)
