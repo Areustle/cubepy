@@ -30,7 +30,10 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from multiprocessing import Pool, Process
+from multiprocessing import shared_memory as sm
 from typing import Any, Callable
 
 import numpy as np
@@ -40,9 +43,28 @@ from .gauss_kronrod import gauss_kronrod
 from .genz_malik import genz_malik
 from .type_aliases import NPF
 
-# import multiprocessing as mp
-
 __all__ = ["integrate"]
+
+
+class Rule:
+    def __init__(self, f, domain_dim, evt_idx_arg, *args):
+        self.f = f
+        # prepare the integral rule
+        self.rule = gauss_kronrod if domain_dim == 1 else genz_malik
+        self.evt_idx_arg = evt_idx_arg
+        self.args = args
+
+        # cen_sh = sm.SharedMemory("cen", create=True, size=center.nbytes)
+        # center_ = np.ndarray(center.shape, dtype=center.dtype, buffer=cen_sh.buf)
+        # np.copyto(center_, center)
+
+    def __call__(self, center, halfwidth, vol, evi):
+        if self.evt_idx_arg:
+            return self.rule(
+                lambda x: self.f(x, evi, *self.args), center, halfwidth, vol
+            )
+        else:
+            return self.rule(lambda x: self.f(x, *self.args), center, halfwidth, vol)
 
 
 def integrate(
@@ -160,7 +182,7 @@ def integrate(
     max_tile_len = np.maximum(max_tile_len, 1)
 
     # prepare the integrand
-    def _f(evi):
+    def func(evi):
         return (lambda x: f(x, evi, *args)) if evt_idx_arg else lambda x: f(x, *args)
 
     # prepare the integral rule
@@ -168,7 +190,7 @@ def integrate(
 
     if range_dim == 0:
         value, error, _ = rule(
-            _f(evtidx[0:1]), center[:, 0:1], halfwidth[:, 0:1], vol[0:1]
+            func(evtidx[0:1]), center[:, 0:1], halfwidth[:, 0:1], vol[0:1]
         )
 
         # prepare results
@@ -177,7 +199,9 @@ def integrate(
             raise RuntimeError("Value/Error shape mismatch after rule application")
         range_dim = value.shape[0]
 
-    tiled_rule = tiled_rule_generator(max_tile_len, parallel, range_dim, rule, _f)
+    tiled_rule = tiled_rule_generator(
+        max_tile_len, parallel, range_dim, Rule(f, domain_dim, evt_idx_arg, *args)
+    )
 
     # perform initial rule application
     value, error, split_dim = tiled_rule(center, halfwidth, vol, evtidx)
@@ -236,38 +260,174 @@ def integrate(
     return result_value, result_error
 
 
+_rule = None
+_domain_dim = None
+_range_dim = None
+_revt_len = None
+_domain_dtype = None
+
+
+def init_tile_rule_worker(rule, domain_dim, range_dim, revt_len, domain_dtype):
+    global _rule
+    global _domain_dim
+    global _range_dim
+    global _revt_len
+    global _domain_dtype
+    _rule = rule
+    _domain_dim = domain_dim
+    _range_dim = range_dim
+    _revt_len = revt_len
+    _domain_dtype = domain_dtype
+
+
+def tile_rule_worker(strtend):
+
+    strt, end = strtend
+
+    global _rule
+    global _domain_dim
+    global _range_dim
+    global _revt_len
+    global _domain_dtype
+
+    c_sh = sm.SharedMemory("cen")
+    h_sh = sm.SharedMemory("hal")
+    v_sh = sm.SharedMemory("vol")
+    e_sh = sm.SharedMemory("evi")
+
+    c = np.ndarray((_domain_dim, _revt_len), dtype=_domain_dtype, buffer=c_sh.buf)
+    h = np.ndarray((_domain_dim, _revt_len), dtype=_domain_dtype, buffer=h_sh.buf)
+    v = np.ndarray((_revt_len), dtype=_domain_dtype, buffer=v_sh.buf)
+    e = np.ndarray((_revt_len), dtype=np.intp, buffer=e_sh.buf)
+
+    val, err, sub = _rule(c[:, strt:end], h[:, strt:end], v[strt:end], e[strt:end])
+
+    c_sh.close()
+    h_sh.close()
+    v_sh.close()
+    e_sh.close()
+
+    val_sh = sm.SharedMemory("val")
+    value = np.ndarray((_range_dim, _revt_len), dtype=_domain_dtype, buffer=val_sh.buf)
+    value[:, strt:end] = val
+    val_sh.close()
+
+    err_sh = sm.SharedMemory("err")
+    error = np.ndarray((_range_dim, _revt_len), dtype=_domain_dtype, buffer=err_sh.buf)
+    error[:, strt:end] = err
+    err_sh.close()
+
+    sub_sh = sm.SharedMemory("sub")
+    split_dim = np.ndarray((_revt_len), dtype=np.intp, buffer=sub_sh.buf)
+    split_dim[strt:end] = sub
+    sub_sh.close()
+
+
 # prepare tiled iteration of the rule.
-def tiled_rule_generator(max_tile_len, parallel, range_dim, rule, _f):
+def tiled_rule_generator(max_tile_len, parallel, range_dim, rule):
     def tiled_rule(center, halfwidth, vol, evtidx):
+
+        print("Entering tiled_rule")
+
+        domain_dim = center.shape[0]
+        domain_dtype = center.dtype
 
         revt_len = evtidx.shape[0]
         numtiles = int(np.ceil(revt_len / max_tile_len))
 
-        value = np.empty((range_dim, revt_len), dtype=center.dtype)
-        error = np.empty((range_dim, revt_len), dtype=center.dtype)
-        split_dim = np.empty((revt_len), dtype=np.intp)
+        print("Allocating result memory")
+
+        val_err_size = range_dim * revt_len * center.itemsize
+        val_sh = sm.SharedMemory("val", create=True, size=val_err_size)
+        err_sh = sm.SharedMemory("err", create=True, size=val_err_size)
+        sub_sh = sm.SharedMemory("sub", create=True, size=revt_len * np.intp(0).nbytes)
+
+        print("Allocating input memory")
+        # cen_half_size = domain_dim * revt_len * center.itemsize
+        cen_sh = sm.SharedMemory("cen", create=True, size=center.nbytes)
+        hal_sh = sm.SharedMemory("hal", create=True, size=halfwidth.nbytes)
+        vol_sh = sm.SharedMemory("vol", create=True, size=vol.nbytes)
+        evi_sh = sm.SharedMemory("evi", create=True, size=evtidx.nbytes)
+
+        print("Allocating input memory as numpy arrays")
+        center_ = np.ndarray(center.shape, dtype=center.dtype, buffer=cen_sh.buf)
+        hwidth_ = np.ndarray(halfwidth.shape, dtype=halfwidth.dtype, buffer=hal_sh.buf)
+        vol_ = np.ndarray(vol.shape, dtype=vol.dtype, buffer=vol_sh.buf)
+        evi_ = np.ndarray(evtidx.shape, dtype=evtidx.dtype, buffer=evi_sh.buf)
+
+        print("filling input memory with copyto")
+        np.copyto(center_, center)
+        np.copyto(hwidth_, halfwidth)
+        np.copyto(vol_, vol)
+        np.copyto(evi_, evtidx)
 
         c_sp = np.array_split(center, numtiles, -1)
-        h_sp = np.array_split(halfwidth, numtiles, -1)
-        v_sp = np.array_split(vol, numtiles, -1)
-        e_sp = np.array_split(evtidx, numtiles, -1)
+        lengths = np.array(list(map(lambda x: x.shape[1], c_sp)))
+        ends = np.cumsum(lengths, 0)
+        starts = np.roll(ends, 1)
+        starts[0] = 0
 
-        lens = np.roll(np.cumsum(np.array(list(map(lambda x: x.shape[1], c_sp))), 0), 1)
-        lens[0] = 0
+        # if isinstance(parallel, bool):
+        #     max_workers = None if parallel else 1
+        # else:
+        #     max_workers = parallel
 
-        def tile_rule_worker(iter, c, h, v, e):
-            end = iter + c.shape[1]
-            val, err, sub = rule(_f(e), c, h, v)
-            value[:, iter:end] = val
-            error[:, iter:end] = err
-            split_dim[iter:end] = sub
+        # with ProcessPoolExecutor(max_workers=None) as exec:
+        #     exec.map(tile_rule_worker, starts, ends)
 
-        if isinstance(parallel, bool):
-            max_workers = None if parallel else 1
-        else:
-            max_workers = parallel
-        with ThreadPoolExecutor(max_workers=max_workers) as exec:
-            exec.map(tile_rule_worker, lens, c_sp, h_sp, v_sp, e_sp)
+        # with ThreadPoolExecutor(max_workers=max_workers) as exec:
+        #     exec.map(tile_rule_worker, starts, ends)
+
+        # threads = []
+        # for s, e in zip(starts, ends):
+        #     x = Process(
+        #         target=tile_rule_worker,
+        #         args=(s, e, domain_dim, range_dim, revt_len, domain_dtype, rule, _f),
+        #     )
+        #     threads.append(x)
+        #     x.start()
+
+        # for t in threads:
+        #     t.join()
+        print("before Pool")
+        with Pool(
+            1,
+            initializer=init_tile_rule_worker,
+            initargs=(rule, domain_dim, range_dim, revt_len, domain_dtype),
+        ) as p:
+            print("launching jobs")
+            p.map(tile_rule_worker, iterable=zip(starts, ends))
+
+        print("cleaning up")
+        cen_sh.close()
+        hal_sh.close()
+        vol_sh.close()
+        evi_sh.close()
+        cen_sh.unlink()
+        hal_sh.unlink()
+        vol_sh.unlink()
+        evi_sh.unlink()
+
+        value_ = np.ndarray(
+            (range_dim, revt_len), dtype=center.dtype, buffer=val_sh.buf
+        )
+        error_ = np.ndarray(
+            (range_dim, revt_len), dtype=center.dtype, buffer=err_sh.buf
+        )
+        split_dim_ = np.ndarray((revt_len), dtype=np.intp, buffer=sub_sh.buf)
+
+        value = np.copy(value_)
+        error = np.copy(error_)
+        split_dim = np.copy(split_dim_)
+
+        val_sh.close()
+        err_sh.close()
+        sub_sh.close()
+        val_sh.unlink()
+        err_sh.unlink()
+        sub_sh.unlink()
+
+        print("leaving tiled_rule")
 
         return value, error, split_dim
 
