@@ -30,14 +30,17 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 import numpy as np
 
-from . import converged, region
+from . import converged, points, region
 from .gauss_kronrod import gauss_kronrod
 from .genz_malik import genz_malik
 from .type_aliases import NPF
+
+# import multiprocessing as mp
 
 __all__ = ["integrate"]
 
@@ -49,8 +52,12 @@ def integrate(
     args: tuple[Any, ...] = tuple([]),
     abstol: float = 1e-6,
     reltol: float = 1e-6,
-    itermax: int | float = 100,
     is_1d: bool = False,
+    evt_idx_arg: bool = False,
+    itermax: int | float = 1000,
+    tile_byte_limit: int | float = 2 ** 30,
+    range_dim: int = 0,
+    parallel: bool = False,
 ) -> tuple[NPF, NPF]:
     """Numerical Cubature in multiple dimensions.
 
@@ -114,21 +121,21 @@ def integrate(
     if low.ndim == 1:
         low = np.expand_dims(low, 0 if is_1d else -1)
         high = np.expand_dims(high, 0 if is_1d else -1)
+        event_shape = low.shape[1:]
     elif low.ndim > 1:
         if is_1d:
+            event_shape = input_shape
             low = np.ravel(low).reshape(1, np.prod(input_shape))
             high = np.ravel(high).reshape(1, np.prod(input_shape))
         else:
-            low = np.ravel(low).reshape(input_shape[0], np.prod(input_shape[1:]))
-            high = np.ravel(high).reshape(input_shape[0], np.prod(input_shape[1:]))
+            event_shape = low.shape[1:]
+            low = np.ravel(low).reshape(input_shape[0], np.prod(event_shape))
+            high = np.ravel(high).reshape(input_shape[0], np.prod(event_shape))
     else:
         raise RuntimeError("Unsupported shape for limits of integration", low.shape)
 
     num_evts = low.shape[-1]
     evtidx = np.arange(num_evts)
-
-    def _f(x: NPF):
-        return f(x, *args)
 
     # :::::::::::::::: Shapes ::::::::::::::::::
     # {low, high}       [ domain_dim, events ]
@@ -146,32 +153,49 @@ def integrate(
     # Create initial region
     center, halfwidth, vol = region.region(low, high)
 
-    if center.shape[0] == 1:
+    domain_dim = center.shape[0]
+    pts = points.num_points(domain_dim) if domain_dim > 1 else 15
+    event_size = center.itemsize * domain_dim * pts
+    max_tile_len = tile_byte_limit / event_size
+    max_tile_len = np.maximum(max_tile_len, 1)
 
-        def rule(c: NPF, h: NPF, v: NPF):
-            return gauss_kronrod(_f, c, h, v)
+    # prepare the integrand
+    def _f(evi):
+        return (lambda x: f(x, evi, *args)) if evt_idx_arg else lambda x: f(x, *args)
 
-    else:
+    # prepare the integral rule
+    rule = gauss_kronrod if center.shape[0] == 1 else genz_malik
 
-        def rule(c: NPF, h: NPF, v: NPF):
-            return genz_malik(_f, c, h, v)
+    if range_dim == 0:
+        value, error, _ = rule(
+            _f(evtidx[0:1]), center[:, 0:1], halfwidth[:, 0:1], vol[0:1]
+        )
+
+        # prepare results
+        if value.shape != error.shape:
+            # expect [range_dim, regions_events]
+            raise RuntimeError("Value/Error shape mismatch after rule application")
+        range_dim = value.shape[0]
+
+    tiled_rule = tiled_rule_generator(max_tile_len, parallel, range_dim, rule, _f)
 
     # perform initial rule application
-    value, error, split_dim = rule(center, halfwidth, vol)
+    value, error, split_dim = tiled_rule(center, halfwidth, vol, evtidx)
 
     # prepare results
     if value.shape != error.shape:
         # expect [range_dim, regions_events]
         raise RuntimeError("Value/Error shape mismatch after rule application")
 
-    range_dim = value.shape[0]
+    if range_dim != value.shape[0]:
+        raise RuntimeError("Function return value does not match input range_dim.")
 
     # [range_dim, events]
     result_value = np.zeros((range_dim, num_evts))
     result_error = np.zeros((range_dim, num_evts))
 
     iter = 1
-    while np.any(iter < int(itermax)):
+    while iter < int(itermax):
 
         # cmask.shape [ regions_events ]
         # Determine which regions are converged
@@ -187,19 +211,64 @@ def integrate(
 
         # nmask.shape [ regions_events ]
         nmask = ~cmask
+        # subdivide the un-converged regions
         center, halfwidth, vol = region.split(
             center[:, nmask], halfwidth[:, nmask], vol[nmask], split_dim[nmask]
         )
         evtidx = np.tile(evtidx[nmask], 2)
-        value, error, split_dim = rule(center, halfwidth, vol)
+
+        value, error, split_dim = tiled_rule(center, halfwidth, vol, evtidx)
 
         iter += 1
 
     if iter == int(itermax):
-        raise RuntimeError("Failed to converge within the iteration limit: ", itermax)
+        raise RuntimeError(
+            "Failed to converge within the iteration limit: ",
+            itermax,
+            "Maximum un-converged error estimate: ",
+            np.amax(error),
+        )
 
-    result_value = np.reshape(result_value, (range_dim, *input_shape[1:]))
-    result_error = np.reshape(result_error, (range_dim, *input_shape[1:]))
+    result_value = np.reshape(result_value, (range_dim, *event_shape))
+    result_error = np.reshape(result_error, (range_dim, *event_shape))
 
     # return np.sum(result_value, axis=0), np.sum(result_error, axis=0)
     return result_value, result_error
+
+
+# prepare tiled iteration of the rule.
+def tiled_rule_generator(max_tile_len, parallel, range_dim, rule, _f):
+    def tiled_rule(center, halfwidth, vol, evtidx):
+
+        revt_len = evtidx.shape[0]
+        numtiles = int(np.ceil(revt_len / max_tile_len))
+
+        value = np.empty((range_dim, revt_len), dtype=center.dtype)
+        error = np.empty((range_dim, revt_len), dtype=center.dtype)
+        split_dim = np.empty((revt_len), dtype=np.intp)
+
+        c_sp = np.array_split(center, numtiles, -1)
+        h_sp = np.array_split(halfwidth, numtiles, -1)
+        v_sp = np.array_split(vol, numtiles, -1)
+        e_sp = np.array_split(evtidx, numtiles, -1)
+
+        lens = np.roll(np.cumsum(np.array(list(map(lambda x: x.shape[1], c_sp))), 0), 1)
+        lens[0] = 0
+
+        def tile_rule_worker(iter, c, h, v, e):
+            end = iter + c.shape[1]
+            val, err, sub = rule(_f(e), c, h, v)
+            value[:, iter:end] = val
+            error[:, iter:end] = err
+            split_dim[iter:end] = sub
+
+        if isinstance(parallel, bool):
+            max_workers = None if parallel else 1
+        else:
+            max_workers = parallel
+        with ThreadPoolExecutor(max_workers=max_workers) as exec:
+            exec.map(tile_rule_worker, lens, c_sp, h_sp, v_sp, e_sp)
+
+        return value, error, split_dim
+
+    return tiled_rule
