@@ -262,12 +262,16 @@ def tiled_rule_generator(max_tile_len, parallel, range_dim, rule, _f):
             error[:, iter:end] = err
             split_dim[iter:end] = sub
 
-        if isinstance(parallel, bool):
-            max_workers = None if parallel else 1
+        # if isinstance(parallel, bool):
+        #     max_workers = None if parallel else 1
+        # else:
+        #     max_workers = parallel
+        if parallel:
+            with ThreadPoolExecutor(max_workers=None) as exec:
+                exec.map(rule_worker, lens, c_sp, h_sp, v_sp, e_sp)
         else:
-            max_workers = parallel
-        with ThreadPoolExecutor(max_workers=max_workers) as exec:
-            exec.map(rule_worker, lens, c_sp, h_sp, v_sp, e_sp)
+            for i, c, h, v, e in zip(lens, c_sp, h_sp, v_sp, e_sp):
+                rule_worker(i, c, h, v, e)
 
         return value, error, split_dim
 
