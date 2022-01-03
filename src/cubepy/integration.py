@@ -255,7 +255,7 @@ def tiled_rule_generator(max_tile_len, parallel, range_dim, rule, _f):
         lens = np.roll(np.cumsum(np.array(list(map(lambda x: x.shape[1], c_sp))), 0), 1)
         lens[0] = 0
 
-        def tile_rule_worker(iter, c, h, v, e):
+        def rule_worker(iter, c, h, v, e):
             end = iter + c.shape[1]
             val, err, sub = rule(_f(e), c, h, v)
             value[:, iter:end] = val
@@ -267,7 +267,7 @@ def tiled_rule_generator(max_tile_len, parallel, range_dim, rule, _f):
         else:
             max_workers = parallel
         with ThreadPoolExecutor(max_workers=max_workers) as exec:
-            exec.map(tile_rule_worker, lens, c_sp, h_sp, v_sp, e_sp)
+            exec.map(rule_worker, lens, c_sp, h_sp, v_sp, e_sp)
 
         return value, error, split_dim
 

@@ -69,7 +69,7 @@ def slant_depth(
         z = np.asarray(z)
 
         h = z * earth_radius / (z + earth_radius)
-        i = np.searchsorted(H_b, h, side="right") - 1
+        i = np.searchsorted(H_b, h, side="right") - 1  # <--!!
 
         deltah = h - H_b[i]
 
@@ -77,7 +77,7 @@ def slant_depth(
 
         mask = Lm_b[i] == 0
         pressure = np.full(z.shape, P_b[i])
-        pressure[mask] *= np.exp(-gmr * deltah[mask] / T_b[i][mask])
+        pressure[mask] *= np.exp(-gmr * deltah[mask] / T_b[i][mask])  # <--!!
         pressure[~mask] *= (T_b[i][~mask] / temperature[~mask]) ** (
             gmr / Lm_b[i][~mask]
         )
