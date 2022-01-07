@@ -55,9 +55,10 @@ def integrate(
     is_1d: bool = False,
     evt_idx_arg: bool = False,
     itermax: int | float = 1000,
-    tile_byte_limit: int | float = 2 ** 30,
+    tile_byte_limit: int | float = 2 ** 25,
     range_dim: int = 0,
     parallel: bool = False,
+    # result_sum=None,
 ) -> tuple[NPF, NPF]:
     """Numerical Cubature in multiple dimensions.
 
@@ -197,7 +198,6 @@ def integrate(
     iter = 1
     while iter < int(itermax):
 
-        # cmask.shape [ regions_events ]
         # Determine which regions are converged
         cmask = converged.converged(value, error, abstol, reltol)
 
@@ -209,8 +209,8 @@ def integrate(
         if np.all(cmask):
             break
 
-        # nmask.shape [ regions_events ]
         nmask = ~cmask
+
         # subdivide the un-converged regions
         center, halfwidth, vol = region.split(
             center[:, nmask], halfwidth[:, nmask], vol[nmask], split_dim[nmask]
@@ -233,7 +233,7 @@ def integrate(
     result_error = np.reshape(result_error, (range_dim, *event_shape))
 
     # return np.sum(result_value, axis=0), np.sum(result_error, axis=0)
-    return result_value, result_error
+    return np.squeeze(result_value), np.squeeze(result_error)
 
 
 # prepare tiled iteration of the rule.
@@ -262,10 +262,6 @@ def tiled_rule_generator(max_tile_len, parallel, range_dim, rule, _f):
             error[:, iter:end] = err
             split_dim[iter:end] = sub
 
-        # if isinstance(parallel, bool):
-        #     max_workers = None if parallel else 1
-        # else:
-        #     max_workers = parallel
         if parallel:
             with ThreadPoolExecutor(max_workers=None) as exec:
                 exec.map(rule_worker, lens, c_sp, h_sp, v_sp, e_sp)
