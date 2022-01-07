@@ -1,6 +1,6 @@
-# CubePy
+# 🧊 CubePy 🐍
 
-Numerical Cubature: Adaptive Multi-dimensional Integration in Python.
+Batched Numerical Cubature: Adaptive Multi-dimensional Integration in Python.
 
 Finally, a _fully_ vectorized multi-dimensional numerical integrator! CubePy is the
 High-Performance, deterministic numerical integrator you've been waiting for.
@@ -9,7 +9,7 @@ Integrate functions with:
  - [x] High Dimensional Domains
  - [x] High Dimensional Co-Domains
  - [x] Multiple limits of integration
- - [x] Independent events computed concurrently.
+ - [x] Independent batches computed concurrently.
  - [x] No Monte-Carlo!
 
 CubePy is a fully-vectorized python package for performing numerical integration on
