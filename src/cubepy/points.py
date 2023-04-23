@@ -30,12 +30,13 @@
 
 from __future__ import annotations
 
-from itertools import product
-from typing import Callable
+from functools import cache
+from itertools import combinations, product
+from typing import List, Tuple
 
 import numpy as np
 
-from .type_aliases import NPF
+from .type_aliases import NPF, NPI, NPT
 
 
 def num_k0k1(dim: int) -> int:
@@ -55,88 +56,77 @@ def num_points(dim: int) -> int:
 
 
 def num_points_full(dim: int) -> tuple[int, ...]:
-    return tuple(
-        [
-            num_k0k1(dim) + num_k2(dim) + num_k6(dim),
-            num_k0k1(dim),
-            num_k0k1(dim) + num_k2(dim),
-        ]
+    return (
+        num_k0k1(dim) + num_k2(dim) + num_k6(dim),
+        num_k0k1(dim),
+        num_k0k1(dim) + num_k2(dim),
     )
 
 
-# p shape [ domain_dim, points, ...]
-def full_kn(c: NPF, numf: Callable) -> NPF:
-    dim = c.shape[0]
-    s = [dim, numf(c.shape[0]), *c.shape[1:]]
-    _shape: tuple = tuple(filter(None, s))
-    return np.full(_shape, c[:, None, ...])
+@cache
+def k2indexes(ndim: int) -> Tuple[List[NPI], List[NPI]]:
+    # fmt: off
+    offset = num_k0k1(ndim)
+    A: List[List[int]] = [[] for _ in range(ndim)]
+    B: List[List[int]] = [[] for _ in range(ndim)]
+    # fmt: on
+    for i, (a, b) in enumerate(combinations(range(ndim), 2)):
+        A[a].append(i)
+        B[b].append(i)
+
+    return (
+        [4 * np.array(x, dtype=int)[:, None] + np.arange(4) + offset for x in A],
+        [4 * np.array(x, dtype=int)[:, None] + np.arange(4) + offset for x in B],
+    )
 
 
-# Center points in full sym(lambda2, 0, ... ,0) & full sym(lambda3=lambda4, 0, ..., 0)
-def pts_k0k1(c: NPF, r1: NPF, r2: NPF, p: NPF | None = None) -> NPF:
+def gm_pts(
+    center: NPF,
+    halfwidth: NPF,
+    alpha2: float = 0.35856858280031809199064515390793749545406372969943071,
+    alpha4: float = 0.94868329805051379959966806332981556011586654179756505,
+    alpha5: float = 0.68824720161168529772162873429362352512689535661564885,
+):
+    # [7, 5] FS rule weights from Genz, Malik: "An adaptive algorithm for numerical
+    # integration Over an N-dimensional rectangular region", updated by Bernstein,
+    # Espelid, Genz in "An Adaptive Algorithm for the Approximate Calculation of
+    # Multiple Integrals"
+    # alpha2 = 0.35856858280031809199064515390793749545406372969943071  # √(9/70)
+    # alpha4 = 0.94868329805051379959966806332981556011586654179756505  # √(9/10)
+    # alpha5 = 0.68824720161168529772162873429362352512689535661564885  # √(9/19)
+    ndim = center.shape[0]
+    npts = num_points(ndim)
+    dtype = center.dtype
 
-    p = full_kn(c, num_k0k1) if p is None else p
+    #  [ domain_dim, points, regions ]
+    p: NPF = np.tile(center[:, None, :], (1, npts, 1))
 
-    for i in range(p.shape[0]):
-        j = 4 * i
-        p[i, j + 1] -= r1[i]
-        p[i, j + 2] += r1[i]
-        p[i, j + 3] -= r2[i]
-        p[i, j + 4] += r2[i]
+    # k1
+    # Center points in fullsym(lambda2, 0, ... ,0) & fullsym(a4, 0, ..., 0)
+    k1T0 = np.tile(np.arange(ndim)[:, None], (1, 4))
+    k1T1 = np.arange(1, num_k0k1(ndim)).reshape((ndim, 4))
+    M1 = np.array([-alpha2, alpha2, -alpha4, alpha4], dtype=dtype)
+    p[k1T0, k1T1] += M1[None, :, None] * halfwidth[:, None]
 
-    return p
+    # k2
+    # Center points in full sym(lambda4, lambda4, ... ,0)
+    k2A, k2B = k2indexes(ndim)
+    M3 = np.array([-alpha4, alpha4, -alpha4, alpha4], dtype=dtype)[:, None]
+    M4 = np.array([-alpha4, -alpha4, alpha4, alpha4], dtype=dtype)[:, None]
+    for d in range(ndim):
+        p[d, k2A[d]] += M3 * halfwidth[d]
+        p[d, k2B[d]] += M4 * halfwidth[d]
 
-
-# Center points for full sym(lambda4, lambda4, 0, ...,0)
-def pts_k2(c: NPF, r: NPF, p: NPF | None = None) -> NPF:
-
-    p = full_kn(c, num_k2) if p is None else p
-    dim = p.shape[0]
-    k = 0
-
-    for i in range(dim - 1):
-        for j in range(i + 1, dim):
-            p[i, k] -= r[i]
-            p[j, k] -= r[j]
-            k += 1
-            p[i, k] += r[i]
-            p[j, k] -= r[j]
-            k += 1
-            p[i, k] -= r[i]
-            p[j, k] += r[j]
-            k += 1
-            p[i, k] += r[i]
-            p[j, k] += r[j]
-            k += 1
-
-    return p
-
-
-# Center points for full sym(lambda5, ...,  lambda5)
-def pts_k6(c: NPF, r: NPF, p: NPF | None = None) -> NPF:
-
-    p = full_kn(c, num_k6) if p is None else p
-    t = np.array(list(product([-1, 1], repeat=p.shape[0]))).T
-    # # p += r[:, None, ...] * t[..., None, None]
-    for i in range(p.shape[0]):
-        p[i] += np.multiply.outer(t[i], r[i])
-    return p
-
-
-def fullsym(c: NPF, l2: NPF, l4: NPF, l5: NPF) -> NPF:
-
-    p: NPF = full_kn(c, num_points)
-    _, d1, d2 = num_points_full(p.shape[0])
-
-    pts_k0k1(c, l2, l4, p=p[:, 0:d1, ...])
-    pts_k2(c, l4, p=p[:, d1:d2, ...])
-    pts_k6(c, l5, p=p[:, d2:, ...])
+    # k6
+    # Center points in full sym(lambda5, lambda5, ... ,lambda5)
+    off6 = num_k0k1(ndim) + num_k2(ndim)
+    M5 = np.array([*product([-alpha5, alpha5], repeat=ndim)], dtype=dtype).T[..., None]
+    p[:, off6:] += M5 * halfwidth[:, None]
 
     return p
 
 
-def gk_pts(c: NPF, h: NPF, p: NPF | None = None) -> NPF:
-
+def gk_pts(c: NPF, h: NPF) -> NPF:
     # GK [7, 15] node points from
     # https://www.advanpix.com/2011/11/07/gauss-kronrod-quadrature-nodes-weights/
     nodes = np.array(
@@ -167,8 +157,4 @@ def gk_pts(c: NPF, h: NPF, p: NPF | None = None) -> NPF:
     p = c + np.multiply.outer(nodes, h)
 
     # {p}  [ 1(domain_dim), points, regions, events ]
-    return np.expand_dims(p, 0)
-
-
-def gm_pts(ndim):
-    pass
+    return p

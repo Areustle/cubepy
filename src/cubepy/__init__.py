@@ -1,5 +1,6 @@
 __all__ = [
     "integrate",
+    "input",
     "integration",
     "points",
     "genz_malik",
@@ -8,5 +9,13 @@ __all__ = [
     "type_aliases",
 ]
 
-from . import gauss_kronrod, genz_malik, integration, points, region, type_aliases
+from . import (
+    gauss_kronrod,
+    genz_malik,
+    input,
+    integration,
+    points,
+    region,
+    type_aliases,
+)
 from .integration import integrate
