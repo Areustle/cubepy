@@ -6,12 +6,12 @@ from cubepy import region
 def test_region_simple():
     def tr(lo, hi):
         c, h, v = region.region(lo, hi)
-        assert c.ndim == 2
-        assert h.ndim == 2
-        assert v.ndim == 1
-        assert np.all(c == 0.5)
-        assert np.all(h == 0.5)
-        assert np.all(v == 1.0)
+        for ci in c:
+            assert np.all(ci == 0.5)
+        for hi in h:
+            assert np.all(hi == 0.5)
+        for vi in v:
+            assert np.all(vi == 1.0)
 
     tr(np.zeros(1), np.ones(1))
     tr(np.zeros((1)), np.ones((1)))
@@ -27,87 +27,175 @@ def test_region_simple():
 
 
 def test_region_complex_1d():
-
     lo = np.expand_dims(np.arange(1.0, 1e5), 0)
     lo -= 0.5e5
     hi = lo + 1.0
 
-    c_true = lo + 0.5
-    h_true = 0.5
-    v_true = 1.0
-
     c, h, v = region.region(lo, hi)
 
-    assert c.shape == c_true.shape
+    assert len(c) == 1
+    assert len(h) == 1
+    assert type(v) == np.ndarray
 
-    assert np.all(c == c_true)
-    assert np.all(h == h_true)
-    assert np.all(v == v_true)
-
-
-def test_region_complex_2d():
-
-    lo = np.arange(1.0, 1e5)
-    lo -= 0.5e5
-    lo = np.stack((lo, lo), 0)
-
-    assert lo.ndim == 2
-    assert lo.shape[0] == 2
-
-    hi = lo + 1.0
-
-    c_true = lo + 0.5
-    h_true = 0.5
-    v_true = 1.0
-
-    c, h, v = region.region(lo, hi)
-
-    assert c.shape == c_true.shape
-
-    assert np.all(c == c_true)
-    assert np.all(h == h_true)
-    assert np.all(v == v_true)
+    assert np.all(c[0] == lo + 0.5)
+    assert np.all(h[0] == 0.5)
+    assert np.all(v == 1.0)
 
 
-def test_region_random_4d():
+def test_split_1():
+    c = np.array([[0.5]])
+    h = np.array([[0.5]])
+    v = np.array([1.0])
+    s = np.array([0])
+    c, h, v = region.split(c, h, v, s, np.array([True]))
 
-    lo = np.random.uniform(low=-1e4, high=1e4, size=(4, int(1e5)))
-
-    assert lo.ndim == 2
-    assert lo.shape[0] == 4
-
-    hi = lo + 1.0
-
-    c_true = lo + 0.5
-    h_true = 0.5
-    v_true = 1.0
-
-    c, h, v = region.region(lo, hi)
-
-    assert c.shape == c_true.shape
-
-    assert np.all(c == c_true)
-    assert np.all(h == h_true)
-    assert np.all(v == v_true)
+    assert np.all(c == [0.25, 0.75])
+    assert np.all(h == [0.25, 0.25])
+    assert np.all(v == [0.5, 0.5])
 
 
-def test_split():
-    c0 = np.ones((1, 1, 10)) * 0.5
-    h0 = np.ones((1, 1, 10)) * 0.5
-    v0 = np.ones((1, 1, 10))
-    sd = np.zeros((1, 10), dtype=int)
+def test_split_2():
+    low = np.array([0.0, 0.0])
+    high = np.array([1.0, np.pi])
 
-    c1, h1, v1 = region.split(c0, h0, v0, sd)
+    c, h, v = region.region(low, high)
+    assert np.all(c == [[0.5], [0.5 * np.pi]])
+    assert np.all(h == [[0.5], [0.5 * np.pi]])
+    assert np.all(v == [np.pi])
 
-    assert c1.ndim == c0.ndim
-    assert h1.ndim == h0.ndim
-    assert v1.ndim == v0.ndim
+    s = np.array([1])
+    umask = np.array([True])
+    c1, h1, v1 = region.split(c, h, v, s, umask)
+    assert np.all(c1 == [[0.5, 0.5], [0.25 * np.pi, 0.75 * np.pi]])
+    assert np.all(h1 == [[0.5, 0.5], [0.25 * np.pi, 0.25 * np.pi]])
+    assert np.all(v1 == [0.5 * np.pi, 0.5 * np.pi])
 
-    assert np.all(c1[:, : (c1.shape[1] // 2), ...] == 0.25), f"{c1}"
-    assert np.all(c1[:, (c1.shape[1] // 2) : -1, ...] == 0.75)
-    assert np.all(h1 == 0.25)
-    assert np.all(v1 == 0.5)
+    s = np.array([0])
+    umask = np.array([True])
+    c1, h1, v1 = region.split(c, h, v, s, umask)
+    assert np.all(c1 == [[0.25, 0.75], [0.5 * np.pi, 0.5 * np.pi]])
+    assert np.all(h1 == [[0.25, 0.25], [0.5 * np.pi, 0.5 * np.pi]])
+    assert np.all(v1 == [0.5 * np.pi, 0.5 * np.pi])
 
+    s = np.array([0, 0])
+    umask = np.array([True, True])
+    c2, h2, v2 = region.split(c1, h1, v1, s, umask)
+    assert np.all(
+        c2
+        == [
+            [0.125, 0.625, 0.375, 0.875],
+            [
+                0.5 * np.pi,
+            ]
+            * 4,
+        ]
+    )
+    assert np.all(
+        h2
+        == [
+            [
+                0.125,
+            ]
+            * 4,
+            [
+                0.5 * np.pi,
+            ]
+            * 4,
+        ]
+    )
+    assert np.all(
+        v2
+        == [
+            0.25 * np.pi,
+        ]
+        * 4
+    )
+
+    # s = np.array([1, 1])
+    # nmask = np.array([[True], [True]])
+    # c2, h2, v2 = region.split(c1, h1, v1, s, nmask)
+    # assert np.all(
+    #     c2
+    #     == [
+    #         [0.125, 0.625, 0.375, 0.875],
+    #         [0.5 * np.pi, 0.5 * np.pi, 0.5 * np.pi, 0.5 * np.pi],
+    #     ]
+    # )
+    # assert np.all(
+    #     h2
+    #     == [
+    #         [0.125, 0.125, 0.125, 0.125],
+    #         [0.5 * np.pi, 0.5 * np.pi, 0.5 * np.pi, 0.5 * np.pi],
+    #     ]
+    # )
+    # assert np.all(v2 == [0.25 * np.pi, 0.25 * np.pi, 0.25 * np.pi, 0.25 * np.pi])
+
+
+# def test_region_complex_2d():
+#     lo = np.arange(1.0, 1e5)
+#     lo -= 0.5e5
+#     lo = np.stack((lo, lo), 0)
+#
+#     assert lo.ndim == 2
+#     assert lo.shape[0] == 2
+#
+#     hi = lo + 1.0
+#
+#     c_true = lo + 0.5
+#     h_true = 0.5
+#     v_true = 1.0
+#
+#     c, h, v = region.region(lo, hi)
+#
+#     assert len(c) == 2
+#     assert len(h) == 2
+#     assert v.shape[0] == lo.shape[1]
+#
+#     assert np.all(c[0] == c_true)
+#     assert np.all(c[1] == c_true)
+#     assert np.all(h[0] == h_true)
+#     assert np.all(h[1] == h_true)
+#     assert np.all(v == v_true)
+#
+#
+# def test_region_random_4d():
+#     lo = np.random.uniform(low=-1e4, high=1e4, size=(4, int(1e5)))
+#
+#     assert lo.ndim == 2
+#     assert lo.shape[0] == 4
+#
+#     hi = lo + 1.0
+#
+#     c_true = lo + 0.5
+#     h_true = 0.5
+#     v_true = 1.0
+#
+#     c, h, v = region.region((*lo,), (*hi,))
+#
+#     assert len(c) == 4
+#
+#     for i, ci in enumerate(c):
+#         assert np.all(ci == c_true[i])
+#     for hi in h:
+#         assert np.all(hi == h_true)
+#     assert np.all(v == v_true)
+
+# def test_split():
+#     c0 = np.ones((1, 1, 10)) * 0.5
+#     h0 = np.ones((1, 1, 10)) * 0.5
+#     v0 = np.ones((1, 1, 10))
+#     sd = np.zeros((1, 10), dtype=int)
+#
+#     c1, h1, v1 = region.split(*c0, *h0, *v0, *sd)
+#
+#     assert c1.ndim == c0.ndim
+#     assert h1.ndim == h0.ndim
+#     assert v1.ndim == v0.ndim
+#
+#     assert np.all(c1[:, : (c1.shape[1] // 2), ...] == 0.25), f"{c1}"
+#     assert np.all(c1[:, (c1.shape[1] // 2) : -1, ...] == 0.75)
+#     assert np.all(h1 == 0.25)
+#     assert np.all(v1 == 0.5)
 
 # def test_split_complex():
 
