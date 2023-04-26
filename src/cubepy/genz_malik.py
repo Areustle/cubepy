@@ -103,6 +103,7 @@ def rule_split_dim(vals, err, halfwidth, volume):
     diff = np.linalg.norm(
         (div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]).reshape(s3), ord=1, axis=2
     )
+    print("diff", diff)
 
     # [ regions ]
     split_dim = np.argmax(diff, axis=0)
@@ -110,7 +111,7 @@ def rule_split_dim(vals, err, halfwidth, volume):
 
     # [ domain_dim, regions ]
     delta = np.abs(diff[split_dim, np.arange(nreg)] - diff[widest_dim, np.arange(nreg)])
-    df = np.sum((err * volume) * 10 ** (-dim), axis=1)  # [ regions ]
+    df = np.sum(err * (volume * 10 ** (-dim)), axis=1)  # [ regions ]
 
     too_close = delta <= df
     split_dim[too_close] = widest_dim[too_close]
@@ -202,7 +203,7 @@ def genz_malik(f: Callable, center, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
     s1 = (npts, nreg * nevt)
     s2 = (2, nreg, nevt)
 
-    # vals = np.reshape(vals, s0)
+    vals = np.reshape(vals, s0)
     # vals = np.reshape(vals, s1)
     w = rule_error_weights(dim)
 

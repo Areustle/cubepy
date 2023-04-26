@@ -146,8 +146,12 @@ def integrate(
     iter: int = 1
     while iter < int(itermax):
         print("::::::::::::::::::::::::::::::::::::::::::::::::::")
-        print("center", center)
-        print("halfwidth", halfwidth)
+        print("center")
+        for x in center:
+            print(x)
+        print("halfwidth")
+        for x in halfwidth:
+            print(x)
         print("vol", vol)
         print("value", value)
         print("error", error)
