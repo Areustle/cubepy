@@ -146,12 +146,15 @@ def integrate(
     iter: int = 1
     while iter < int(itermax):
         print("::::::::::::::::::::::::::::::::::::::::::::::::::")
-        # print("value", value)
-        # print("error", error)
-        # print("split", split_dim)
+        print("center", center)
+        print("halfwidth", halfwidth)
+        print("vol", vol)
+        print("value", value)
+        print("error", error)
+        print("split", split_dim)
         # Determine which regions are converged [ regions, events ]
         local_cmask = converged.converged(value, error, parent_value, rtol, atol)
-        # print("converged", local_cmask)
+        print("converged", local_cmask)
 
         # Some of the converged regions were converged in a previous iteration, but the
         # event was kept for subsequent iterations so remaining regions could converge.

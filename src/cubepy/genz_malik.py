@@ -113,9 +113,6 @@ def rule_split_dim(vals, err, halfwidth, volume):
     df = np.sum((err * volume) * 10 ** (-dim), axis=1)  # [ regions ]
 
     too_close = delta <= df
-    print(delta)
-    print(df)
-    # print(too_close)
     split_dim[too_close] = widest_dim[too_close]
     return split_dim
 
