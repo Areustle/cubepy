@@ -68,8 +68,6 @@ def split(center, halfwidth, vol, split_dim, active_region_mask):
         raise IndexError("split dimension invalid")
 
     # {center, halfwidth}  [ domain_dim, regions ]
-    # print("active", active_region_mask.shape, active_region_mask)
-    # print("center", center.shape, active_region_mask)
     center = center[:, active_region_mask]
     halfwidth = halfwidth[:, active_region_mask]
 
@@ -82,7 +80,6 @@ def split(center, halfwidth, vol, split_dim, active_region_mask):
     center[:, rnum:][split_dim] += halfwidth[split_dim]
 
     halfwidth = np.tile(halfwidth, (1, 2))
-    # print("halfwidth", halfwidth)
 
     # vol [ regions ]
     vol = np.tile(vol[active_region_mask] * 0.5, 2)

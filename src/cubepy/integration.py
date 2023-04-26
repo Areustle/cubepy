@@ -30,7 +30,6 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from operator import mul
 from typing import Any, Callable, Sequence
@@ -42,12 +41,9 @@ from .gauss_kronrod import gauss_kronrod
 from .genz_malik import genz_malik
 from .type_aliases import NPF, InputBoundsT
 
-# import multiprocessing as mp
-
 __all__ = ["integrate"]
 
 
-# @profile
 def integrate(
     f: Callable,
     low: InputBoundsT,
@@ -58,8 +54,6 @@ def integrate(
     rtol: float = 1e-5,
     atol: float = 1e-6,
     itermax: int | float = 1000,
-    # tile_byte_limit: int | float = 2**25,
-    # parallel: bool = False,
 ) -> tuple[NPF, NPF]:
     """Numerical Cubature in multiple dimensions.
 
@@ -116,29 +110,32 @@ def integrate(
 
     low, high, event_shape = input.parse_input(f, low, high, args, nint)
     nint = low.shape[0]
-    num_evts = reduce(mul, event_shape, 1)
+    nevts = reduce(mul, event_shape, 1)
     # evtidx = np.expand_dims(np.arange(num_evts), 0)  # [ regions, events ]
-    global_active_mask = np.ones((1, num_evts), dtype=bool)  # [ regions, events ]
-    global_active_event_idxs = np.arange(num_evts)
+    global_active_mask = np.ones((1, nevts), dtype=bool)  # [ regions, events ]
+    global_active_evt_idx = np.arange(nevts)
     aemsk = input.get_arg_evt_mask(args, event_shape)
 
     # [ events ]
-    result_value = np.zeros(num_evts)
-    result_error = np.zeros(num_evts)
+    result_value = np.zeros(nevts)
+    result_error = np.zeros(nevts)
     # [ regions, events ]
-    parent_value = np.zeros((1, num_evts))
+    parent_value = np.zeros((1, nevts))
 
     # Prepare the integrand including applying the event mask to the maskable elements
     # in the args array.
-    def _f(ev):
-        if nint == 1:
+    if nint == 1:
+
+        def _f(ev):
             return lambda x: f(x, *(a[ev] if b else a for a, b in zip(args, aemsk)))
-        else:
+
+    else:
+
+        def _f(ev):
             return lambda x: f(*x, *(a[ev] if b else a for a, b in zip(args, aemsk)))
 
     # Create initial region
     center, halfwidth, vol = region.region(low, high)
-    # max_tile_len = input.get_max_tile_length(center, tile_byte_limit)
 
     # prepare the integral rule
     rule_ = gauss_kronrod if len(center) == 1 else genz_malik
@@ -149,9 +146,7 @@ def integrate(
     # tiled_rule = tiled_rule_generator(_f, rule, max_tile_len, parallel)
 
     # Perform initial rule application. [regions, events]
-    value, error, split_dim = tiled_rule(
-        center, halfwidth, vol, global_active_event_idxs
-    )
+    value, error, split_dim = tiled_rule(center, halfwidth, vol, global_active_evt_idx)
 
     # Prepare results
     if value.shape != error.shape:
@@ -160,50 +155,34 @@ def integrate(
 
     iter: int = 1
     while iter < int(itermax):
-        # print(iter, "====================================================")
-        # print("value", value, np.sum(value))
-        # print("error", error)
         # Determine which regions are converged [ regions, events ]
         local_cmask = converged.converged(value, error, parent_value, rtol, atol)
-        # print("local_cmask")
-        # print(local_cmask)
 
         # Some of the converged regions were converged in a previous iteration, but the
         # event was kept for subsequent iterations so remaining regions could converge.
         # To avoid double counting the converged subregions mask them out. The mask
         # should shrink as events become fully converged.
         cmask = global_active_mask & local_cmask  # [R,E]
-        # print("cmask")
-        # print(cmask)
 
         # global event indices of locally converged regions, events [ regions, events ]
-        cevtidx = np.broadcast_to(global_active_event_idxs, cmask.shape)[cmask]
-        # print("cevtidx")
-        # print(cevtidx)
+        evtidx = np.broadcast_to(global_active_evt_idx, cmask.shape)[cmask]
 
         # Accumulate converged region results into correct global events.
         # bincount is most efficient accumulator when multiple regions in the same
         # event converge.
-        # print(np.bincount(cevtidx, value[cmask], num_evts).shape)
-        # print(np.bincount(cevtidx, value[cmask], num_evts))
-        result_value[global_active_event_idxs] += np.bincount(
-            cevtidx, value[cmask], num_evts
-        )
-        result_error[global_active_event_idxs] += np.bincount(
-            cevtidx, error[cmask], num_evts
-        )
+        result_value[global_active_evt_idx] += np.bincount(evtidx, value[cmask], nevts)
+        result_error[global_active_evt_idx] += np.bincount(evtidx, error[cmask], nevts)
 
-        if np.all(cmask):
+        if np.all(local_cmask):
             break
 
         # Globally active, locally unconverged regions.
         umask = global_active_mask & ~local_cmask  # [R,E]
-        # print("umask", umask.shape, umask)
         active_region_mask = np.any(umask, axis=1)  # [ regions ]
         active_event_mask = np.any(umask, axis=0)  # [ events ]
 
         # global indices of unconverged events # [ kept_events ]
-        global_active_event_idxs = global_active_event_idxs[active_event_mask]
+        global_active_evt_idx = global_active_evt_idx[active_event_mask]
         # update parent_values with active values
         # [ kept_regions, kept_events ]
         parent_value = value[np.ix_(active_region_mask, active_event_mask)]
@@ -214,9 +193,9 @@ def integrate(
         )
         # [ kept_regions, events ]
 
-        # perform the rule on un-converged regions.
+        # Perform the rule on un-converged regions.
         value, error, split_dim = tiled_rule(
-            center, halfwidth, vol, global_active_event_idxs
+            center, halfwidth, vol, global_active_evt_idx
         )
 
         iter += 1
@@ -233,43 +212,3 @@ def integrate(
     result_error = np.reshape(result_error, event_shape)
 
     return np.squeeze(result_value), np.squeeze(result_error)
-
-
-# # prepare tiled version of the rule.
-# def tiled_rule_generator(f, rule, max_tile_len, parallel):
-#     def tiled_rule(center, halfwidth, vol, evtidx):
-#         revt_len = evtidx.shape[0]
-#         numtiles = int(np.ceil(revt_len / max_tile_len))
-#
-#         value = np.empty(revt_len, dtype=center.dtype)
-#         error = np.empty(revt_len, dtype=center.dtype)
-#         split_dim = np.empty((revt_len), dtype=np.intp)
-#
-#         c_sp = np.array_split(center, numtiles, -1)
-#         h_sp = np.array_split(halfwidth, numtiles, -1)
-#         v_sp = np.array_split(vol, numtiles, -1)
-#         e_sp = np.array_split(evtidx, numtiles, -1)
-#
-#         lens = np.roll(np.cumsum(np.array(list(map(lambda x: x.shape[1], c_sp))), 0), 1)
-#         lens[0] = 0
-#
-#         def rule_worker(iter, c, h, v, e):
-#             end = iter + c.shape[1]
-#             # val, err, sub = rule(f(e), c, h, v)
-#             # value[:, iter:end] = val
-#             # error[:, iter:end] = err
-#             # split_dim[iter:end] = sub
-#             value[:, iter:end], error[:, iter:end], split_dim[iter:end] = rule(
-#                 f(e), c, h, v
-#             )
-#
-#         if parallel:
-#             with ThreadPoolExecutor(max_workers=None) as exec:
-#                 exec.map(rule_worker, lens, c_sp, h_sp, v_sp, e_sp)
-#         else:
-#             for i, c, h, v, e in zip(lens, c_sp, h_sp, v_sp, e_sp):
-#                 rule_worker(i, c, h, v, e)
-#
-#         return value, error, split_dim
-#
-#     return tiled_rule

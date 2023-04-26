@@ -15,4 +15,6 @@ value, error = cp.integrate(
     [0.0, 0.0, 0.0],
     [1.0, 2 * np.pi, np.pi],
     args=(radii,),
+    # rtol=1e-3,
+    # atol=1e-3
 )
