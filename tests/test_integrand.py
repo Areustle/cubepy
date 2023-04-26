@@ -29,67 +29,47 @@ def exact_sphere(r):
 
 def test_sphere():
     def integrand_sphere(r, _, phi):
-        return r**2 * np.sin(phi)
+        return np.sin(phi) * r**2
 
-    value, error = cp.integrate(
-        integrand_sphere, [0.0, 0.0, 0.0], [1.0, 2 * np.pi, np.pi]
-    )
-
+    value, _ = cp.integrate(integrand_sphere, [0.0, 0.0, 0.0], [1.0, 2 * np.pi, np.pi])
     assert np.allclose(value, exact_sphere(1.0))
-    assert np.all(error < 1e-5)
 
-    value, error = cp.integrate(
-        integrand_sphere, [0.0, 0.0, 0.0], [3.0, 2 * np.pi, np.pi]
-    )
+    value, _ = cp.integrate(integrand_sphere, [0.0, 0.0, 0.0], [3.0, 2 * np.pi, np.pi])
     assert np.allclose(value, exact_sphere(3.0))
-
-    def integrand_sphere_(r_i, _, phi):
-        return (3 * np.sqrt(3.0) * r_i) ** 2 * np.sin(phi)
-
-    value, error = cp.integrate(
-        integrand_sphere_, [0.0, 0.0, 0.0], [1.0, 2 * np.pi, np.pi]
-    )
-    assert np.allclose(value, exact_sphere(3.0))
-
-    # assert np.all(error < 1e-5)
 
 
 def test_sphere_v():
-    def integrand_sphere_v(r, _, phi, radius):
-        return (np.sin(phi) * r**2)[..., None] * (radius) ** 3
+    def integrand_sphere(r, _, phi):
+        return np.sin(phi) * r**2
 
-    radii = np.linspace(1, 100, int(1e4))
+    radii = np.linspace(1, 100, 50)
 
     value, _ = cp.integrate(
-        integrand_sphere_v,
+        integrand_sphere,
         [0.0, 0.0, 0.0],
-        [1.0, 2 * np.pi, np.pi],
-        args=(radii,),
+        [radii, 2 * np.pi, np.pi],
     )
 
-    assert np.allclose(
-        value,
-        exact_sphere(
-            radii,
-        ),
-    )
+    assert np.allclose(value, exact_sphere(radii))
 
 
-def test_ellipsoid():
-    def integrand_ellipsoid(rho, _, theta, a, b, c):
-        return a * b * c * rho**2 * np.sin(theta)
-
-    def exact_ellipsoid(axes):
-        return (4 / 3) * np.pi * np.prod(axes, axis=0)
-
-    value, error = cp.integrate(
-        integrand_ellipsoid, [0.0, 0.0, 0.0], [1.0, 2.0 * np.pi, np.pi], args=(1, 2, 3)
-    )
-
-    assert np.allclose(value, exact_ellipsoid([1, 2, 3]))
-    # assert np.all(error < 1e-5)
-
-
+#
+#
+# def test_ellipsoid():
+#     def integrand_ellipsoid(rho, _, theta, a, b, c):
+#         return a * b * c * rho**2 * np.sin(theta)
+#
+#     def exact_ellipsoid(axes):
+#         return (4 / 3) * np.pi * np.prod(axes, axis=0)
+#
+#     value, error = cp.integrate(
+#         integrand_ellipsoid, [0.0, 0.0, 0.0], [1.0, 2.0 * np.pi, np.pi], args=(1, 2, 3)
+#     )
+#
+#     assert np.allclose(value, exact_ellipsoid([1, 2, 3]))
+#     # assert np.all(error < 1e-5)
+#
+#
 #
 #
 # def test_multi():

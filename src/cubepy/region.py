@@ -30,58 +30,75 @@
 
 from __future__ import annotations
 
+from functools import reduce
+from operator import mul
+
 import numpy as np
 
-from .type_aliases import NPT  # , NPF, NPI
-
-# from functools import reduce
-# from operator import mul
+# from .type_aliases import NPT  # , NPF, NPI
 
 # from typing import
 
 __all__ = ["region", "split"]
 
 
-def region(low: NPT, high: NPT):
-    # ) -> Tuple[ValidBoundsT, ValidBoundsT, ValidBoundsT]:
+def region(low, high):
     """Compute the hyper-rectangular region parameters from given limits of integration."""
 
     # :::::::::::::::: Shapes ::::::::::::::::::
-    # {low, high}.shape [ domain_dim ]
-    # centers.shape     [ domain_dim, regions ]
-    # halfwidth.shape   [ domain_dim, regions ]
-    # vol.shape         [ regions ]
+    # {low, high} domain_dim * [ { 1 | nevts } ]
+    # center      domain_dim * [ regions, { 1 | nevts } ]
+    # halfwidth   domain_dim * [ regions, { 1 | nevts } ]
+    # vol.shape         [ regions, nevts ]
 
-    centers = 0.5 * (high + low)[:, None]
-    halfwidth = 0.5 * (high - low)[:, None]
-    vol = np.prod(2.0 * halfwidth, axis=0)
-    return centers, halfwidth, vol
+    # center = 0.5 * (high + low)[:, None]
+    # halfwidth = 0.5 * (high - low)[:, None]
+    # vol = np.prod(2.0 * halfwidth, axis=0)
+    # return center, halfwidth, vol
+
+    center = [np.expand_dims(0.5 * (hi + lo), 0) for lo, hi in zip(low, high)]
+    halfwidth = [np.expand_dims(0.5 * (hi - lo), 0) for lo, hi in zip(low, high)]
+    vol = reduce(mul, [2.0 * h for h in halfwidth])
+    return center, halfwidth, vol
 
 
-def split(center, halfwidth, vol, split_dim, active_region_mask):
+def split(center, halfwidth, vol, split_dim):
     """
     Split the input arrays along the specified dimension according to split_dim
     unless every event in which that region is active is converged. In that case, drop
     the region.
     """
-    if np.amin(split_dim) < 0 or np.amax(split_dim) >= (center.shape[0]):
+    if np.amin(split_dim) < 0 or np.amax(split_dim) >= len(center):
         raise IndexError("split dimension invalid")
 
-    # {center, halfwidth}  [ domain_dim, regions ]
-    center = center[:, active_region_mask]
-    halfwidth = halfwidth[:, active_region_mask]
+    # {center, halfwidth}  [ regions, { 1 | nevts } ]
 
+    dim = len(center)
+    nreg = center[0].shape[0]
+
+    # print(split_dim)
     # split_dim [ regions ]
-    split_dim = split_dim[active_region_mask]
-    halfwidth[split_dim, :] *= 0.5
-    rnum = center.shape[1]
-    center = np.tile(center, (1, 2))
-    center[:, :rnum][split_dim] -= halfwidth[split_dim]
-    center[:, rnum:][split_dim] += halfwidth[split_dim]
+    # split_dim = split_dim[active_region_mask]
+    split_mask = split_dim == np.arange(dim)[:, None]
 
-    halfwidth = np.tile(halfwidth, (1, 2))
+    for d in range(dim):
+        halfwidth[d][split_mask[d]] *= 0.5
+        center[d] = np.tile(center[d], (2, 1))
+        # print(dim, nreg, d, split_mask[d].shape, center[d].shape, halfwidth[d].shape)
+        m1 = split_mask[d, :nreg]
+        m2 = split_mask[d, nreg:]
+        center[d][:nreg][m1] -= halfwidth[d][m1]
+        center[d][nreg:][m2] += halfwidth[d][m2]
+        halfwidth[d] = np.tile(halfwidth[d], (2, 1))
 
-    # vol [ regions ]
-    vol = np.tile(vol[active_region_mask] * 0.5, 2)
+    # halfwidth[split_dim, :] *= 0.5
+    # rnum = center.shape[1]
+    # center = np.tile(center, (1, 2))
+    # center[:, :rnum][split_dim] -= halfwidth[split_dim]
+    # center[:, rnum:][split_dim] += halfwidth[split_dim]
+    # halfwidth = np.tile(halfwidth, (1, 2))
+
+    # vol [ regions, events ]
+    vol = np.tile(vol * 0.5, (2, 1))
 
     return center, halfwidth, vol
