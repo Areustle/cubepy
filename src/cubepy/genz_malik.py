@@ -100,8 +100,11 @@ def rule_split_dim(vals, err, halfwidth, volume):
     # [ domain_dim, regions, events ] = [ domain_dim, d1 ] @ [ d1, regions, events ]
     # fdiff = div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]
     # [ domain_dim, regions ]
+    print(dim, "div_diff_weights", div_diff_weights(dim).T)
+    print(vals.shape)
+    print(vals.reshape(s1)[:d1, ...])
     diff = np.linalg.norm(
-        (div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]).reshape(s3), ord=1, axis=2
+        (div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]).reshape(s3), ord=1, axis=-1
     )
     print("diff", diff)
 
@@ -208,7 +211,10 @@ def genz_malik(f: Callable, center, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
     w = rule_error_weights(dim)
 
     result, res5th = (w @ vals.reshape(s1)).reshape(s2) * volume[None, ...]
+    print("result", result)
+    print("res5th", res5th)
     err = np.abs(res5th - result)  # [ regions, events ]
+    print("err", err)
     split_dim = rule_split_dim(vals.reshape(s0), err, halfwidth, volume)  # [ regions ]
 
     # [regions, events] [ regions, events ] [ regions ]
