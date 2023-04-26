@@ -86,32 +86,36 @@ def div_diff_weights(dim: int) -> NPF:
 def rule_split_dim(vals, err, halfwidth, volume):
     # vals [ points, regions, events ]
     # err [ regions, events ]
-    # halfwidth [ domain_dim, regions ]
-    # volume [ regions ]
+    # halfwidth domain_dim * [ regions, { 1 | nevts } ]
+    # volume [ regions, events ]
 
-    dim = halfwidth.shape[0]
+    dim = len(halfwidth)
     npts, nreg, nevt = vals.shape
     d1 = points.num_k0k1(dim)
 
-    # Compute the 4th divided difference to determine dimension on which to split.
+    # Compute the 4th divided difference to determine the dimension on which to split.
     s1 = (npts, nreg * nevt)
-    s2 = (dim, nreg, nevt)
+    s3 = (dim, nreg, nevt)
 
     # [ domain_dim, regions, events ] = [ domain_dim, d1 ] @ [ d1, regions, events ]
     # fdiff = div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]
     # [ domain_dim, regions ]
     diff = np.linalg.norm(
-        (div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]).reshape(s2), ord=1, axis=-1
+        (div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]).reshape(s3), ord=1, axis=2
     )
 
-    split_dim = np.argmax(diff, axis=0)  # [ regions ]
-    widest_dim = np.argmax(halfwidth, axis=0)  # [ regions ]
+    # [ regions ]
+    split_dim = np.argmax(diff, axis=0)
+    widest_dim = np.argmax(np.asarray([np.amax(h, axis=1) for h in halfwidth]), axis=0)
 
     # [ domain_dim, regions ]
     delta = np.abs(diff[split_dim, np.arange(nreg)] - diff[widest_dim, np.arange(nreg)])
-    df = np.sum(err, axis=1) * (volume * 10 ** (-dim))  # [ regions ]
+    df = np.sum((err * volume) * 10 ** (-dim), axis=1)  # [ regions ]
 
     too_close = delta <= df
+    print(delta)
+    print(df)
+    # print(too_close)
     split_dim[too_close] = widest_dim[too_close]
     return split_dim
 
@@ -121,8 +125,8 @@ def error_weights_vec(dim: int) -> NPF:
     d1 = points.num_k0k1(dim)
     d2 = points.num_k2(dim)
     d3 = d1 + d2
-    a = np.zeros(d3)
     wE = error_weights(dim)
+    a = np.zeros(d3)
     a[0] = wE[0]
     a[1:d1:4] = wE[1]
     a[2:d1:4] = wE[1]
@@ -137,8 +141,8 @@ def rule_weights_vec(dim: int) -> NPF:
     d1 = points.num_k0k1(dim)
     d2 = points.num_k2(dim)
     d3 = d1 + d2
-    a = np.zeros(points.num_points(dim))
     w = rule_weights(dim)
+    a = np.zeros(points.num_points(dim))
     a[0] = w[0]
     a[1:d1:4] = w[1]
     a[2:d1:4] = w[1]
@@ -181,29 +185,33 @@ def genz_malik(f: Callable, center, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
     # alpha5 = √(9/19)
     # ratio = 0.14285714285714285714285714285714285714285714285714281  # ⍺₂² / ⍺₄²
 
-    # p shape [ domain_dim, points, regions ]
-    p = points.gm_pts(center, halfwidth)
-    dim = p.shape[0]
-    npts = p.shape[1]
-    nreg = p.shape[2]
+    # p shape domain_dim * [ points, regions, { 1 | nevts } ]
+    pts = points.gm_pts(center, halfwidth)
+    dim = len(center)
+    npts = points.num_points(dim)
+    nreg = center[0].shape[0]
 
-    # save shape then reshape to [domain_dim, (points*regions), 1] before passing to f
-    p = np.reshape(p, (dim, nreg * npts, 1))
-    vals = f(p)
+    # Save shape then reshape to [domain_dim, (points*regions), 1] before passing to f
+    # p = np.reshape(p, (dim, nreg * npts, 1))
+    pts = [np.reshape(p, (npts * nreg, p.shape[-1])) for p in pts]
     # vals shape [ points * regions, events  ] ==> [ points, regions, events ]
+    vals = f(pts)
+    # any eventwise operations in the integrand will automatically be (N, 1) * (M)
+    # or (N, M) * (M) operations, so should return events in the trailing dimension.
     nevt = vals.size // (nreg * npts)
-    vals = np.reshape(vals, (npts, nreg, nevt))
-    # any eventwise operations in the integrand will automatically be a (N, 1) * (M)
-    # operation, so should return events in the trailing dimension.
 
+    # Reshape shapes to conform to matmul shape requirements.
+    s0 = (npts, nreg, nevt)
     s1 = (npts, nreg * nevt)
     s2 = (2, nreg, nevt)
 
-    result, res5th = (rule_error_weights(dim) @ vals.reshape(s1)).reshape(s2) * volume[
-        None, :, None
-    ]
+    # vals = np.reshape(vals, s0)
+    # vals = np.reshape(vals, s1)
+    w = rule_error_weights(dim)
+
+    result, res5th = (w @ vals.reshape(s1)).reshape(s2) * volume[None, ...]
     err = np.abs(res5th - result)  # [ regions, events ]
-    split_dim = rule_split_dim(vals, err, halfwidth, volume)  # [ regions ]
+    split_dim = rule_split_dim(vals.reshape(s0), err, halfwidth, volume)  # [ regions ]
 
     # [regions, events] [ regions, events ] [ regions ]
     return result, err, split_dim

@@ -39,21 +39,21 @@ import numpy as np
 from . import converged, input, region
 from .gauss_kronrod import gauss_kronrod
 from .genz_malik import genz_malik
-from .type_aliases import NPF, InputBoundsT
+from .type_aliases import NPF
 
 __all__ = ["integrate"]
 
 
 def integrate(
     f: Callable,
-    low: InputBoundsT,
-    high: InputBoundsT,
+    low,
+    high,
     args: Sequence[Any] = tuple([]),
     *,  # kwonly arguments
-    nint: None | int = None,
+    domain_dim: None | int = None,
     rtol: float = 1e-5,
     atol: float = 1e-6,
-    itermax: int | float = 1000,
+    itermax: int | float = 100,
 ) -> tuple[NPF, NPF]:
     """Numerical Cubature in multiple dimensions.
 
@@ -96,8 +96,8 @@ def integrate(
     """
 
     # :::::::::::::::: Shapes ::::::::::::::::::
-    # {low, high}       [ domain_dim ]
-    # {center, hwidth}  [ domain_dim, regions ]
+    # {low, high}       [ domain_dim, {events} ]
+    # {center, hwidth}  [ domain_dim, regions, {events} ]
     # {volume}          [ regions ]
 
     # ---------------- Results -----------------
@@ -108,10 +108,9 @@ def integrate(
     # ------------ Working vectors -------------
     # {cmask}   [ regions, events ]
 
-    low, high, event_shape = input.parse_input(f, low, high, args, nint)
-    nint = low.shape[0]
+    low, high, event_shape = input.parse_input(f, low, high, args, domain_dim)
+    domain_dim = len(low)
     nevts = reduce(mul, event_shape, 1)
-    # evtidx = np.expand_dims(np.arange(num_evts), 0)  # [ regions, events ]
     global_active_mask = np.ones((1, nevts), dtype=bool)  # [ regions, events ]
     global_active_evt_idx = np.arange(nevts)
     aemsk = input.get_arg_evt_mask(args, event_shape)
@@ -124,15 +123,8 @@ def integrate(
 
     # Prepare the integrand including applying the event mask to the maskable elements
     # in the args array.
-    if nint == 1:
-
-        def _f(ev):
-            return lambda x: f(x, *(a[ev] if b else a for a, b in zip(args, aemsk)))
-
-    else:
-
-        def _f(ev):
-            return lambda x: f(*x, *(a[ev] if b else a for a, b in zip(args, aemsk)))
+    def _f(ev):
+        return lambda x: f(*x, *(a[ev] if b else a for a, b in zip(args, aemsk)))
 
     # Create initial region
     center, halfwidth, vol = region.region(low, high)
@@ -140,13 +132,11 @@ def integrate(
     # prepare the integral rule
     rule_ = gauss_kronrod if len(center) == 1 else genz_malik
 
-    def tiled_rule(c, h, v, e):
+    def rule(c, h, v, e):
         return rule_(_f(e), c, h, v)
 
-    # tiled_rule = tiled_rule_generator(_f, rule, max_tile_len, parallel)
-
     # Perform initial rule application. [regions, events]
-    value, error, split_dim = tiled_rule(center, halfwidth, vol, global_active_evt_idx)
+    value, error, split_dim = rule(center, halfwidth, vol, global_active_evt_idx)
 
     # Prepare results
     if value.shape != error.shape:
@@ -155,14 +145,19 @@ def integrate(
 
     iter: int = 1
     while iter < int(itermax):
+        print("::::::::::::::::::::::::::::::::::::::::::::::::::")
+        # print("value", value)
+        # print("error", error)
+        # print("split", split_dim)
         # Determine which regions are converged [ regions, events ]
         local_cmask = converged.converged(value, error, parent_value, rtol, atol)
+        # print("converged", local_cmask)
 
         # Some of the converged regions were converged in a previous iteration, but the
         # event was kept for subsequent iterations so remaining regions could converge.
         # To avoid double counting the converged subregions mask them out. The mask
         # should shrink as events become fully converged.
-        cmask = global_active_mask & local_cmask  # [R,E]
+        cmask = global_active_mask & local_cmask  # [ regions, events ]
 
         # global event indices of locally converged regions, events [ regions, events ]
         evtidx = np.broadcast_to(global_active_evt_idx, cmask.shape)[cmask]
@@ -180,23 +175,30 @@ def integrate(
         umask = global_active_mask & ~local_cmask  # [R,E]
         active_region_mask = np.any(umask, axis=1)  # [ regions ]
         active_event_mask = np.any(umask, axis=0)  # [ events ]
+        active_mask = np.ix_(active_region_mask, active_event_mask)
 
-        # global indices of unconverged events # [ kept_events ]
-        global_active_evt_idx = global_active_evt_idx[active_event_mask]
         # update parent_values with active values
-        # [ kept_regions, kept_events ]
-        parent_value = value[np.ix_(active_region_mask, active_event_mask)]
+        parent_value = value[active_mask]  # [ kept_regions, kept_events ]
 
-        # subdivide the un-converged regions
-        center, halfwidth, vol = region.split(
-            center, halfwidth, vol, split_dim, active_region_mask
-        )
-        # [ kept_regions, events ]
+        # mask out the converged events from regions
+        center = [
+            c[active_region_mask] if c.shape[1] == 1 else c[active_mask] for c in center
+        ]
+        halfwidth = [
+            h[active_region_mask] if h.shape[1] == 1 else h[active_mask]
+            for h in halfwidth
+        ]
+        vol = vol[active_mask]
+        split_dim = split_dim[active_region_mask]
+
+        # subdivide the un-converged regions [ kept_regions, kept_events ]
+        center, halfwidth, vol = region.split(center, halfwidth, vol, split_dim)
+
+        # global indices of unconverged events
+        global_active_evt_idx = global_active_evt_idx[active_event_mask]  # [kept_evts]
 
         # Perform the rule on un-converged regions.
-        value, error, split_dim = tiled_rule(
-            center, halfwidth, vol, global_active_evt_idx
-        )
+        value, error, split_dim = rule(center, halfwidth, vol, global_active_evt_idx)
 
         iter += 1
 

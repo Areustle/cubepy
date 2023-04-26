@@ -81,8 +81,8 @@ def k2indexes(ndim: int) -> Tuple[List[NPI], List[NPI]]:
 
 
 def gm_pts(
-    center: NPF,
-    halfwidth: NPF,
+    center,
+    halfwidth,
     alpha2: float = 0.35856858280031809199064515390793749545406372969943071,
     alpha4: float = 0.94868329805051379959966806332981556011586654179756505,
     alpha5: float = 0.68824720161168529772162873429362352512689535661564885,
@@ -94,34 +94,40 @@ def gm_pts(
     # alpha2 = 0.35856858280031809199064515390793749545406372969943071  # √(9/70)
     # alpha4 = 0.94868329805051379959966806332981556011586654179756505  # √(9/10)
     # alpha5 = 0.68824720161168529772162873429362352512689535661564885  # √(9/19)
-    ndim = center.shape[0]
-    npts = num_points(ndim)
-    dtype = center.dtype
+    dim = len(center)
+    npts = num_points(dim)
+    dtype = center[0].dtype
 
-    #  [ domain_dim, points, regions ]
-    p: NPF = np.tile(center[:, None, :], (1, npts, 1))
+    # {center, halfwidth}  domain_dim * [ regions, { 1 | nevts } ]
 
-    # k1
-    # Center points in fullsym(lambda2, 0, ... ,0) & fullsym(a4, 0, ..., 0)
-    k1T0 = np.tile(np.arange(ndim)[:, None], (1, 4))
-    k1T1 = np.arange(1, num_k0k1(ndim)).reshape((ndim, 4))
-    M1 = np.array([-alpha2, alpha2, -alpha4, alpha4], dtype=dtype)
-    p[k1T0, k1T1] += M1[None, :, None] * halfwidth[:, None]
+    # p: domain_dim * [ points, regions, { 1 | nevts } ]
+    p = [np.tile(c, (npts, 1, 1)) for c in center]
 
-    # k2
-    # Center points in full sym(lambda4, lambda4, ... ,0)
-    k2A, k2B = k2indexes(ndim)
-    M3 = np.array([-alpha4, alpha4, -alpha4, alpha4], dtype=dtype)[:, None]
-    M4 = np.array([-alpha4, -alpha4, alpha4, alpha4], dtype=dtype)[:, None]
-    for d in range(ndim):
-        p[d, k2A[d]] += M3 * halfwidth[d]
-        p[d, k2B[d]] += M4 * halfwidth[d]
+    M1 = np.array([-alpha2, alpha2, -alpha4, alpha4], dtype=dtype)[:, None, None]
+    M2a = np.array([-alpha4, alpha4, -alpha4, alpha4], dtype=dtype)[:, None, None]
+    M2b = np.array([-alpha4, -alpha4, alpha4, alpha4], dtype=dtype)[:, None, None]
+    M6 = np.array([*product([-alpha5, alpha5], repeat=dim)], dtype=dtype).T[
+        ..., None, None
+    ]
 
-    # k6
-    # Center points in full sym(lambda5, lambda5, ... ,lambda5)
-    off6 = num_k0k1(ndim) + num_k2(ndim)
-    M5 = np.array([*product([-alpha5, alpha5], repeat=ndim)], dtype=dtype).T[..., None]
-    p[:, off6:] += M5 * halfwidth[:, None]
+    # k1T0 = np.tile(np.arange(dim)[:, None], (1, 4))
+    # k1T1 = np.arange(1, num_k0k1(dim)).reshape((dim, 4))
+    for d in range(dim):
+        # k1
+        # Center points in fullsym(lambda2, 0, ... ,0) & fullsym(a4, 0, ..., 0)
+        k1i = 4 * d
+        p[d][1 + k1i : 5 + k1i] += M1 * halfwidth[d]
+
+        # k2
+        # Center points in full sym(lambda4, lambda4, ... ,0)
+        k2A, k2B = k2indexes(dim)
+        p[d][k2A[d]] += M2a * halfwidth[d]
+        p[d][k2B[d]] += M2b * halfwidth[d]
+
+        # k6
+        # Center points in full sym(lambda5, lambda5, ... ,lambda5)
+        off6 = num_k0k1(dim) + num_k2(dim)
+        p[d][off6:] += M6[d] * halfwidth[d]
 
     return p
 

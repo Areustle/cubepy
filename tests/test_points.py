@@ -16,13 +16,14 @@ def test_nums():
 
 def test_gm_pts():
     #############################################################
-    c = np.zeros((2, 1))
-    h = np.ones((2, 1))
+    c = np.zeros((2, 1, 1))
+    h = np.ones((2, 1, 1))
     p = points.gm_pts(c, h, 2, 4, 5)
     assert len(p) == 2
     assert len(p[0]) == 17
     assert len(p[1]) == 17
-    assert p[0].shape == (17, 1)
+    assert p[0].shape == (17, 1, 1)
+    assert p[1].shape == (17, 1, 1)
     assert np.all(p[0][0].flat == [0])
     assert np.all(p[1][0].flat == [0])
     assert np.all(p[0][1:9].flat == [-2, 2, -4, 4, 0, 0, 0, 0])
@@ -32,14 +33,16 @@ def test_gm_pts():
     assert np.all(p[0][13:].flat == [-5, -5, 5, 5])
     assert np.all(p[1][13:].flat == [-5, 5, -5, 5])
 
-    c = np.zeros((3, 1))
-    h = np.ones((3, 1))
+    c = np.zeros((3, 1, 1))
+    h = np.ones((3, 1, 1))
     p = points.gm_pts(c, h, 2, 4, 5)
     assert len(p) == 3
     assert len(p[0]) == 33
     assert len(p[1]) == 33
     assert len(p[2]) == 33
-    assert p[0].shape == (33, 1)
+    assert p[0].shape == (33, 1, 1)
+    assert p[1].shape == (33, 1, 1)
+    assert p[2].shape == (33, 1, 1)
     assert np.all(p[0][0].flat == [0])
     assert np.all(p[1][0].flat == [0])
     assert np.all(p[2][0].flat == [0])
@@ -53,15 +56,18 @@ def test_gm_pts():
     assert np.all(p[1][25:].flat == [-5, -5, 5, 5, -5, -5, 5, 5])
     assert np.all(p[2][25:].flat == [-5, 5, -5, 5, -5, 5, -5, 5])
 
-    c = np.zeros((4, 1))
-    h = np.ones((4, 1))
+    c = np.zeros((4, 1, 1))
+    h = np.ones((4, 1, 1))
     p = points.gm_pts(c, h, 2, 4, 5)
     assert len(p) == 4
     assert len(p[0]) == 57
     assert len(p[1]) == 57
     assert len(p[2]) == 57
     assert len(p[3]) == 57
-    assert p[0].shape == (57, 1)
+    assert p[0].shape == (57, 1, 1)
+    assert p[1].shape == (57, 1, 1)
+    assert p[2].shape == (57, 1, 1)
+    assert p[3].shape == (57, 1, 1)
     assert np.all(
         p[0][:17].flat == [0, -2, 2, -4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     )
@@ -102,6 +108,31 @@ def test_gm_pts():
     assert np.all(
         p[3][41:].flat == [-5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5, -5, 5]
     )
+
+
+def test_gm_evts():
+    c = [np.zeros((1, 1)), np.zeros((1, 10))]
+    # h = np.ones((2, 1, 1))
+    h = [np.ones((1, 1)), np.ones((1, 10))]
+    p = points.gm_pts(c, h, 2, 4, 5)
+    assert len(p) == 2
+    assert len(p[0]) == 17
+    assert len(p[1]) == 17
+    assert p[0].shape == (17, 1, 1)
+    assert p[1].shape == (17, 1, 10)
+    assert np.all(p[0][0].flat == [0])
+    assert np.all(p[1][0].flat == np.tile([0], 10))
+    assert np.all(p[0][1:9].flat == [-2, 2, -4, 4, 0, 0, 0, 0])
+    for i in range(10):
+        assert np.all(p[1][1:9, 0, i] == [0, 0, 0, 0, -2, 2, -4, 4])
+    assert np.all(p[0][9:13].flat == [-4, 4, -4, 4])
+    for i in range(10):
+        assert np.all(p[1][9:13, 0, i] == [-4, -4, 4, 4])
+    # assert np.all(p[1][9:13].flatten() == np.tile([-4, -4, 4, 4], (1, 10)).flatten())
+    assert np.all(p[0][13:].flat == [-5, -5, 5, 5])
+    # assert np.all(p[1][13:].flatten() == np.tile([-5, 5, -5, 5], (1, 10)).flatten())
+    for i in range(10):
+        assert np.all(p[1][13:, 0, i] == [-5, 5, -5, 5])
 
 
 def test_gk_pts():

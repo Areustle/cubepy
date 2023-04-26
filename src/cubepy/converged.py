@@ -40,19 +40,21 @@ def converged(
 ) -> NPB:
     """Determine wether error values are below threshod for convergence."""
 
-    d = result.shape[0] // 2
+    r = result.shape[0] // 2
     E = local_error
-    if d >= 1:
-        # E2 = np.abs(parent_result - (result[:d] + result[d:]))  # [ r/2, events ]
-        # inv_error = np.reciprocal(local_error[:d] + local_error[d:])  # [ r/2, events ]
-        # E[:d] += E2 * (0.25 + 0.5 * inv_error * E[:d])
-        # E[d:] += E2 * (0.25 + 0.5 * inv_error * E[d:])
-        local_error_shape = local_error.shape
-        E = local_error.reshape((2, d, local_error.shape[1]))
-        F = 0.25 * np.abs(parent_result - (result[:d] + result[d:]))
-        G = 1.0 + 2.0 * F / (local_error[:d] + local_error[d:])
-        E = E * G + F
-        E = E.reshape(local_error_shape)
+    if r >= 1:
+        E2 = np.abs(parent_result - (result[:r] + result[r:]))  # [ r/2, events ]
+        inv_error = np.reciprocal(local_error[:r] + local_error[r:])  # [ r/2, events ]
+        E[:r] += E2 * (0.25 + 0.5 * inv_error * E[:r])
+        E[r:] += E2 * (0.25 + 0.5 * inv_error * E[r:])
+        # local_error_shape = local_error.shape
+        # E = local_error.reshape((2, d, local_error.shape[1]))
+        # F = 0.25 * np.abs(parent_result - (result[:d] + result[d:]))
+        # G = 1.0 + 2.0 * F / (local_error[:d] + local_error[d:])
+        # E = E * G + F
+        # E = E.reshape(local_error_shape)
+
+    # print(atol + rtol * np.abs(result))
 
     # {cmask}       [ regions, events ]
     return E <= (atol + rtol * np.abs(result))
