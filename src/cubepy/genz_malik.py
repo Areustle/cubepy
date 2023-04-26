@@ -29,6 +29,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
+from functools import cache
 from typing import Callable
 
 import numpy as np
@@ -37,7 +38,9 @@ from . import points
 from .type_aliases import NPF, NPI
 
 
-def genz_malik_weights(dim: int) -> NPF:
+# def genz_malik_weights(dim: int) -> NPF:
+@cache
+def rule_weights(dim: int) -> NPF:
     return np.array(
         [
             (12824.0 - 9120.0 * dim + 400.0 * dim**2) / 19683.0,
@@ -49,7 +52,9 @@ def genz_malik_weights(dim: int) -> NPF:
     )
 
 
-def genz_malik_err_weights(dim: int) -> NPF:
+# def genz_malik_err_weights(dim: int) -> NPF:
+@cache
+def error_weights(dim: int) -> NPF:
     return np.array(
         [
             (729.0 - 950.0 * dim + 50.0 * dim**2) / 729.0,
@@ -60,7 +65,110 @@ def genz_malik_err_weights(dim: int) -> NPF:
     )
 
 
-# @profile
+@cache
+def div_diff_weights(dim: int) -> NPF:
+    ratio = 0.14285714285714285714285714285714285714285714285714281  # ⍺₂² / ⍺₄²
+    a = np.zeros((dim, points.num_k0k1(dim)), dtype=float)
+    a[:, 0] = -2 + 2 * ratio
+    # for i in range(dim):
+    #     start = 1 + (i * 4)
+    #     stop = start + 4
+    #     a[i, start:stop] = [1.0, 1.0, -ratio, -ratio]
+
+    k1T0 = np.tile(np.arange(dim)[:, None], (1, 4))
+    k1T1 = np.arange(1, points.num_k0k1(dim)).reshape((dim, 4))
+    # M1 = np.array([-alpha2, alpha2, -alpha4, alpha4], dtype=dtype)
+    a[k1T0, k1T1] = [1.0, 1.0, -ratio, -ratio]
+
+    return a
+
+
+def rule_split_dim(vals, err, halfwidth, volume):
+    # vals [ points, regions, events ]
+    # err [ regions, events ]
+    # halfwidth [ domain_dim, regions ]
+    # volume [ regions ]
+
+    dim = halfwidth.shape[0]
+    npts, nreg, nevt = vals.shape
+    d1 = points.num_k0k1(dim)
+
+    # Compute the 4th divided difference to determine dimension on which to split.
+    s1 = (npts, nreg * nevt)
+    s2 = (dim, nreg, nevt)
+
+    # [ domain_dim, regions, events ] = [ domain_dim, d1 ] @ [ d1, regions, events ]
+    # fdiff = div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]
+    # [ domain_dim, regions ]
+    diff = np.linalg.norm(
+        (div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]).reshape(s2), ord=1, axis=-1
+    )
+
+    split_dim = np.argmax(diff, axis=0)  # [ regions ]
+    widest_dim = np.argmax(halfwidth, axis=0)  # [ regions ]
+
+    # [ domain_dim, regions ]
+    delta = np.abs(diff[split_dim, np.arange(nreg)] - diff[widest_dim, np.arange(nreg)])
+    df = np.sum(err, axis=1) * (volume * 10 ** (-dim))  # [ regions ]
+
+    too_close = delta <= df
+    split_dim[too_close] = widest_dim[too_close]
+    return split_dim
+
+
+@cache
+def error_weights_vec(dim: int) -> NPF:
+    d1 = points.num_k0k1(dim)
+    d2 = points.num_k2(dim)
+    d3 = d1 + d2
+    a = np.zeros(d3)
+    wE = error_weights(dim)
+    a[0] = wE[0]
+    a[1:d1:4] = wE[1]
+    a[2:d1:4] = wE[1]
+    a[3:d1:4] = wE[2]
+    a[4:d1:4] = wE[2]
+    a[d1:d3] = wE[3]
+    return a
+
+
+@cache
+def rule_weights_vec(dim: int) -> NPF:
+    d1 = points.num_k0k1(dim)
+    d2 = points.num_k2(dim)
+    d3 = d1 + d2
+    a = np.zeros(points.num_points(dim))
+    w = rule_weights(dim)
+    a[0] = w[0]
+    a[1:d1:4] = w[1]
+    a[2:d1:4] = w[1]
+    a[3:d1:4] = w[2]
+    a[4:d1:4] = w[2]
+    a[d1:d3] = w[3]
+    a[d3:] = w[4]
+    return a
+
+
+@cache
+def rule_error_weights(dim: int) -> NPF:
+    """
+    The necessary weights for computing the 7th and 5th order genz malik rule values
+    laid out in matrix form.
+    """
+    d1 = points.num_k0k1(dim)
+    d2 = points.num_k2(dim)
+    d3 = d1 + d2
+    a = np.zeros((2, points.num_points(dim)))
+    w = rule_weights(dim)
+    wE = error_weights(dim)
+    a[:, 0:1] = np.array([w[0], wE[0]])[:, None]
+    a[:, 1:d1:4] = np.array([w[1], wE[1]])[:, None]
+    a[:, 2:d1:4] = np.array([w[1], wE[1]])[:, None]
+    a[:, 3:d1:4] = np.array([w[2], wE[2]])[:, None]
+    a[:, 4:d1:4] = np.array([w[2], wE[2]])[:, None]
+    a[:, d1:d3] = np.array([w[3], wE[3]])[:, None]
+    a[:, d3:] = np.array([w[4], 0])[:, None]
+    return a
 
 
 def genz_malik(f: Callable, center, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
@@ -71,71 +179,31 @@ def genz_malik(f: Callable, center, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
     # alpha2 = √(9/70)
     # alpha4 = √(9/10)
     # alpha5 = √(9/19)
-    ratio = 0.14285714285714285714285714285714285714285714285714281  # ⍺₂² / ⍺₄²
+    # ratio = 0.14285714285714285714285714285714285714285714285714281  # ⍺₂² / ⍺₄²
 
     # p shape [ domain_dim, points, regions ]
-    # p shape [ domain_dim, regions, points ]
     p = points.gm_pts(center, halfwidth)
-    ndim = p.shape[0]
+    dim = p.shape[0]
+    npts = p.shape[1]
     nreg = p.shape[2]
-    d1 = points.num_k0k1(ndim)
-    d2 = points.num_k2(ndim)
-    d3 = d1 + d2
 
-    # vals shape [ points, regions, events ]
-    # vals shape [ events, regions, points  ]
+    # save shape then reshape to [domain_dim, (points*regions), 1] before passing to f
+    p = np.reshape(p, (dim, nreg * npts, 1))
     vals = f(p)
+    # vals shape [ points * regions, events  ] ==> [ points, regions, events ]
+    nevt = vals.size // (nreg * npts)
+    vals = np.reshape(vals, (npts, nreg, nevt))
+    # any eventwise operations in the integrand will automatically be a (N, 1) * (M)
+    # operation, so should return events in the trailing dimension.
 
-    if vals.ndim == 2:
-        vals = np.expand_dims(vals, 2)
+    s1 = (npts, nreg * nevt)
+    s2 = (2, nreg, nevt)
 
-    # print("vals shape", vals.shape)
-
-    vc = vals[0:1]  # center integrand value. shape = [ 1, regions, events ]
-    # N.B. [0:1] is a load-bearing slice to keep the leading dimension from getting
-    # squeezed out. Same as the more verbose, less efficient vals[0][None, ...]
-
-    # [ domain_dim, regions, events ]
-    v01 = vals[1:d1:4] + vals[2:d1:4]
-    v23 = vals[3:d1:4] + vals[4:d1:4]
-
-    # Compute the 4th divided difference to determine dimension on which to split.
-    # [ domain_dim, regions ]
-    diff = np.linalg.norm(v01 - 2 * vc - ratio * (v23 - 2 * vc), ord=1, axis=-1)
-
-    vc = np.squeeze(vc, 0)  # [ regions, events ]
-    s2 = np.sum(v01, axis=0)  # [ regions, events ]
-    s3 = np.sum(v23, axis=0)  # [ regions, events ]
-    s4 = np.sum(vals[d1:d3], axis=0)  # [ regions, events ]
-    s5 = np.sum(vals[d3:], axis=0)  # [ regions, events ]
-
-    w = genz_malik_weights(ndim)  # [5]
-    wE = genz_malik_err_weights(ndim)  # [4]
-
-    # [ regions, events ] = [5] . [ 5, regions, events ]
-    result = volume[:, None] * np.tensordot(w, (vc, s2, s3, s4, s5), (0, 0))
-    # print("volume shape", volume.shape)
-    # print("result shape", result.shape)
-
-    # [ regions, events ] = [4] . [ 4, regions, events ]
-    res5th = volume[:, None] * np.tensordot(wE, (vc, s2, s3, s4), (0, 0))
-
+    result, res5th = (rule_error_weights(dim) @ vals.reshape(s1)).reshape(s2) * volume[
+        None, :, None
+    ]
     err = np.abs(res5th - result)  # [ regions, events ]
-
-    # determine split dimension
-    split_dim = np.argmax(diff, axis=0)  # [ regions ]
-    widest_dim = np.argmax(halfwidth, axis=0)  # [ regions ]
-
-    # [ domain_dim, regions ]
-    delta = diff[split_dim, np.arange(nreg)] - diff[widest_dim, np.arange(nreg)]
-    df = np.sum(err, axis=1) * (volume * 10 ** (-ndim))  # [ regions ]
-    too_close = delta <= df
-    split_dim[too_close] = widest_dim[too_close]
-
-    # print("vals", vals.shape)
-    # print("result", result.shape)
-    # print("err", err.shape)
-    # print("split_dim", split_dim.shape)
+    split_dim = rule_split_dim(vals, err, halfwidth, volume)  # [ regions ]
 
     # [regions, events] [ regions, events ] [ regions ]
     return result, err, split_dim
