@@ -41,7 +41,7 @@ def converged(
     """Determine wether error values are below threshod for convergence."""
 
     r = result.shape[0] // 2
-    E = local_error
+    E = np.copy(local_error)
     if r >= 1:
         E2 = np.abs(parent_result - (result[:r] + result[r:]))  # [ r/2, events ]
         inv_error = np.reciprocal(local_error[:r] + local_error[r:])  # [ r/2, events ]
@@ -54,7 +54,8 @@ def converged(
         # E = E * G + F
         # E = E.reshape(local_error_shape)
 
-    # print(atol + rtol * np.abs(result))
+    # print("[[[[[[[[[[[[[[[[[[[[[[[[[")
+    # print(E, atol, rtol, atol + rtol * np.abs(result))
 
     # {cmask}       [ regions, events ]
     return E <= (atol + rtol * np.abs(result))
