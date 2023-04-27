@@ -100,13 +100,9 @@ def rule_split_dim(vals, err, halfwidth, volume):
     # [ domain_dim, regions, events ] = [ domain_dim, d1 ] @ [ d1, regions, events ]
     # fdiff = div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]
     # [ domain_dim, regions ]
-    # print(dim, "div_diff_weights", div_diff_weights(dim).T)
-    # print(vals.shape)
-    # print(vals.reshape(s1)[:d1, ...])
     diff = np.linalg.norm(
         (div_diff_weights(dim) @ vals.reshape(s1)[:d1, ...]).reshape(s3), ord=1, axis=-1
     )
-    # print("diff", diff)
 
     # [ regions ]
     split_dim = np.argmax(diff, axis=0)
@@ -119,6 +115,7 @@ def rule_split_dim(vals, err, halfwidth, volume):
     too_close = delta <= df
     split_dim[too_close] = widest_dim[too_close]
     return split_dim
+    # return np.full_like(split_dim, 2)
 
 
 @cache
@@ -196,7 +193,6 @@ def genz_malik(f: Callable, center, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
     # p = np.reshape(p, (dim, nreg * npts, 1))
     pts = [np.reshape(p, (npts * nreg, p.shape[-1])) for p in pts]
     # vals shape [ points * regions, events  ] ==> [ points, regions, events ]
-    # print(pts)
     vals = f(pts)
     # any eventwise operations in the integrand will automatically be (N, 1) * (M)
     # or (N, M) * (M) operations, so should return events in the trailing dimension.
