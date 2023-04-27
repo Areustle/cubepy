@@ -87,7 +87,7 @@ def rule_split_dim(vals, err, halfwidth, volume):
     # vals [ points, regions, events ]
     # err [ regions, events ]
     # halfwidth domain_dim * [ regions, { 1 | nevts } ]
-    # volume [ regions, events ]
+    # volume [ events ]
 
     dim = len(halfwidth)
     npts, nreg, nevt = vals.shape
@@ -110,7 +110,7 @@ def rule_split_dim(vals, err, halfwidth, volume):
 
     # [ domain_dim, regions ]
     delta = np.abs(diff[split_dim, np.arange(nreg)] - diff[widest_dim, np.arange(nreg)])
-    df = np.sum(err * (volume * 10 ** (-dim)), axis=1)  # [ regions ]
+    df = np.sum(err * (volume[None, :] * 10 ** (-dim)), axis=1)  # [ regions ]
 
     too_close = delta <= df
     split_dim[too_close] = widest_dim[too_close]
@@ -207,7 +207,7 @@ def genz_malik(f: Callable, center, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
     # vals = np.reshape(vals, s1)
     w = rule_error_weights(dim)
 
-    rpack = (w @ vals.reshape(s1)).reshape(s2) * volume[None, ...]
+    rpack = (w @ vals.reshape(s1)).reshape(s2) * volume
     rpack[1] = np.abs(np.diff(rpack, axis=0))  # [ regions, events ]
     result, err = rpack
     split_dim = rule_split_dim(vals.reshape(s0), err, halfwidth, volume)  # [ regions ]
