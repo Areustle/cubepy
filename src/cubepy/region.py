@@ -76,7 +76,6 @@ def split(center, halfwidth, vol, split_dim):
     dim = len(center)
     nreg = center[0].shape[0]
 
-    # print(split_dim)
     # split_dim [ regions ]
     # split_dim = split_dim[active_region_mask]
     split_mask = split_dim == np.arange(dim)[:, None]
@@ -84,9 +83,8 @@ def split(center, halfwidth, vol, split_dim):
     for d in range(dim):
         halfwidth[d][split_mask[d]] *= 0.5
         center[d] = np.tile(center[d], (2, 1))
-        # print(dim, nreg, d, split_mask[d].shape, center[d].shape, halfwidth[d].shape)
-        m1 = split_mask[d, :nreg]
-        m2 = split_mask[d, nreg:]
+        m1 = split_mask[d]
+        m2 = split_mask[d]
         center[d][:nreg][m1] -= halfwidth[d][m1]
         center[d][nreg:][m2] += halfwidth[d][m2]
         halfwidth[d] = np.tile(halfwidth[d], (2, 1))
