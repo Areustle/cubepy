@@ -49,16 +49,11 @@ def region(low, high):
     # {low, high} domain_dim * [ { 1 | nevts } ]
     # center      domain_dim * [ regions, { 1 | nevts } ]
     # halfwidth   domain_dim * [ regions, { 1 | nevts } ]
-    # vol.shape         [ regions, nevts ]
-
-    # center = 0.5 * (high + low)[:, None]
-    # halfwidth = 0.5 * (high - low)[:, None]
-    # vol = np.prod(2.0 * halfwidth, axis=0)
-    # return center, halfwidth, vol
+    # vol.shape         [ nevts ]
 
     center = [np.expand_dims(0.5 * (hi + lo), 0) for lo, hi in zip(low, high)]
     halfwidth = [np.expand_dims(0.5 * (hi - lo), 0) for lo, hi in zip(low, high)]
-    vol = reduce(mul, [2.0 * h for h in halfwidth])
+    vol = reduce(mul, [2.0 * h for h in halfwidth]).ravel()
     return center, halfwidth, vol
 
 
@@ -77,7 +72,6 @@ def split(center, halfwidth, vol, split_dim):
     nreg = center[0].shape[0]
 
     # split_dim [ regions ]
-    # split_dim = split_dim[active_region_mask]
     split_mask = split_dim == np.arange(dim)[:, None]
 
     for d in range(dim):
@@ -89,14 +83,7 @@ def split(center, halfwidth, vol, split_dim):
         center[d][nreg:][m2] += halfwidth[d][m2]
         halfwidth[d] = np.tile(halfwidth[d], (2, 1))
 
-    # halfwidth[split_dim, :] *= 0.5
-    # rnum = center.shape[1]
-    # center = np.tile(center, (1, 2))
-    # center[:, :rnum][split_dim] -= halfwidth[split_dim]
-    # center[:, rnum:][split_dim] += halfwidth[split_dim]
-    # halfwidth = np.tile(halfwidth, (1, 2))
-
-    # vol [ regions, events ]
-    vol = np.tile(vol * 0.5, (2, 1))
+    # vol [ events ]
+    vol *= 0.5
 
     return center, halfwidth, vol
