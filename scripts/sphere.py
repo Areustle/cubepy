@@ -7,7 +7,7 @@ def integrand_sphere_v(r, _, phi):
     return np.sin(phi) * r**2
 
 
-radii = np.linspace(1, 100, 50)
+radii = np.linspace(1, 100, int(1e6))
 
 value, error = cp.integrate(
     integrand_sphere_v,

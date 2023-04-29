@@ -173,24 +173,18 @@ def rule_error_weights(dim: int) -> NPF:
     return a
 
 
-def genz_malik(f: Callable, center, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
+def genz_malik(f: Callable, pts, halfwidth, volume) -> tuple[NPF, NPF, NPI]:
     # [7, 5] FS rule weights from Genz, Malik: "An adaptive algorithm for numerical
     # integration Over an N-dimensional rectangular region", updated by Bernstein,
     # Espelid, Genz in "An Adaptive Algorithm for the Approximate Calculation of
     # Multiple Integrals"
-    # alpha2 = √(9/70)
-    # alpha4 = √(9/10)
-    # alpha5 = √(9/19)
-    # ratio = 0.14285714285714285714285714285714285714285714285714281  # ⍺₂² / ⍺₄²
 
     # p shape domain_dim * [ points, regions, { 1 | nevts } ]
-    pts = points.gm_pts(center, halfwidth)
-    dim = len(center)
+    dim = len(pts)
     npts = points.num_points(dim)
-    nreg = center[0].shape[0]
+    nreg = halfwidth[0].shape[0]
 
     # Save shape then reshape to [domain_dim, (points*regions), 1] before passing to f
-    # p = np.reshape(p, (dim, nreg * npts, 1))
     pts = [np.reshape(p, (npts * nreg, p.shape[-1])) for p in pts]
     # vals shape [ points * regions, events  ] ==> [ points, regions, events ]
     vals = f(pts)

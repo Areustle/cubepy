@@ -136,14 +136,16 @@ def test_gm_evts():
 
 
 def test_gk_pts():
-    c = np.zeros((1, 1))
-    h = np.ones((1, 1)) * 0.5
+    c = np.zeros((1, 1, 1))
+    h = np.ones((1, 1, 1)) * 0.5
 
     gk = points.gk_pts(c, h)
 
-    assert gk.ndim == 2
-    assert gk.shape[0] == 15
-    assert gk.shape[1] == 1
+    assert gk.ndim == 4
+    assert gk.shape[0] == 1
+    assert gk.shape[1] == 15
+    assert gk.shape[2] == 1
+    assert gk.shape[3] == 1
     assert not np.all(gk == 0)
     assert np.all(gk[:7] == -gk[-1:7:-1])
 
@@ -159,20 +161,20 @@ def test_gk_pts():
         ]
     )
 
-    w = np.multiply.outer(xgk, np.squeeze(h, 0))
+    w = np.multiply.outer(xgk, h.ravel())
 
-    assert gk[0, ...] == c - w[0, ...]
-    assert gk[1, ...] == c - w[1, ...]
-    assert gk[2, ...] == c - w[2, ...]
-    assert gk[3, ...] == c - w[3, ...]
-    assert gk[4, ...] == c - w[4, ...]
-    assert gk[5, ...] == c - w[5, ...]
-    assert gk[6, ...] == c - w[6, ...]
-    assert gk[7, ...] == c
-    assert gk[8, ...] == c + w[6, ...]
-    assert gk[9, ...] == c + w[5, ...]
-    assert gk[10, ...] == c + w[4, ...]
-    assert gk[11, ...] == c + w[3, ...]
-    assert gk[12, ...] == c + w[2, ...]
-    assert gk[13, ...] == c + w[1, ...]
-    assert gk[14, ...] == c + w[0, ...]
+    assert gk[0, 0, ...] == c - w[0]
+    assert gk[0, 1, ...] == c - w[1]
+    assert gk[0, 2, ...] == c - w[2]
+    assert gk[0, 3, ...] == c - w[3]
+    assert gk[0, 4, ...] == c - w[4]
+    assert gk[0, 5, ...] == c - w[5]
+    assert gk[0, 6, ...] == c - w[6]
+    assert gk[0, 7, ...] == c
+    assert gk[0, 8, ...] == c + w[6]
+    assert gk[0, 9, ...] == c + w[5]
+    assert gk[0, 10, ...] == c + w[4]
+    assert gk[0, 11, ...] == c + w[3]
+    assert gk[0, 12, ...] == c + w[2]
+    assert gk[0, 13, ...] == c + w[1]
+    assert gk[0, 14, ...] == c + w[0]
