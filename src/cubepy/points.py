@@ -97,7 +97,7 @@ def gm_weights(
     # alpha5 = 0.68824720161168529772162873429362352512689535661564885  # √(9/19)
     npts = num_points(dim)
 
-    M = [np.empty(npts) for _ in range(dim)]
+    M = [np.zeros(npts) for _ in range(dim)]
     M1 = np.array([-alpha2, alpha2, -alpha4, alpha4], dtype=dtype)
     M2a = np.array([-alpha4, alpha4, -alpha4, alpha4], dtype=dtype)
     M2b = np.array([-alpha4, -alpha4, alpha4, alpha4], dtype=dtype)

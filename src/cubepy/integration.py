@@ -54,7 +54,7 @@ def integrate(
     domain_dim: None | int = None,
     rtol: float = 1e-5,
     atol: float = 1e-8,
-    itermax: int | float = 100,
+    itermax: int | float = 16,
 ) -> tuple[NPF, NPF]:
     """Numerical Cubature in multiple dimensions.
 
