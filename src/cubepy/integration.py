@@ -39,6 +39,7 @@ import numpy as np
 from . import converged, input, region
 from .gauss_kronrod import gauss_kronrod
 from .genz_malik import genz_malik
+from .points import gk_pts, gm_pts
 from .type_aliases import NPF
 
 __all__ = ["integrate"]
@@ -113,6 +114,7 @@ def integrate(
     nevts = reduce(mul, event_shape, 1)
     active_evt_idx = np.arange(nevts)  # [ kept_evts ]
     aemsk = input.get_arg_evt_mask(args, event_shape)
+    error = np.array([])
 
     # [ events ]
     result_value = np.zeros(nevts)
@@ -130,69 +132,57 @@ def integrate(
 
     # prepare the integral rule
     rule_ = gauss_kronrod if len(center) == 1 else genz_malik
+    pts_ = gk_pts if len(center) == 1 else gm_pts
 
-    def rule(c, h, v, e):
-        return rule_(_f(e), c, h, v)
+    def rule(p, h, v, e):
+        return rule_(_f(e), p, h, v)
 
-    # Perform initial rule application. [regions, events]
-    value, error, split_dim = rule(center, halfwidth, vol, active_evt_idx)
-
-    # Prepare results
-    if value.shape != error.shape:
-        # expect [regions, events]
-        raise RuntimeError("Value/Error shape mismatch after rule application")
+    pts = pts_(center, halfwidth)
 
     iter: int = 1
     while iter < int(itermax):
+        # Perform rule application on unconverged regions. [regions, events]
+        value, error, split_dim = rule(pts, halfwidth, vol, active_evt_idx)
+
+        iter += 1
+
         # Determine which regions are converged [ regions, active_events ]
-        cmask = converged.converged(value, error, parent_value, rtol, atol)
+        converge_mask = converged.converged(value, error, parent_value, rtol, atol)
 
-        # Some of the converged regions were converged in a previous iteration, but the
-        # event was kept for subsequent iterations so remaining regions could converge.
-        # To avoid double counting the converged subregions mask them out. The mask
-        # should shrink as events become fully converged.
+        # Event indices of locally converged regions, events [ regions, events ]
+        evtidx = np.broadcast_to(active_evt_idx, converge_mask.shape)[converge_mask]
 
-        # event indices of locally converged regions, events [ regions, events ]
-        evtidx = np.broadcast_to(active_evt_idx, cmask.shape)[cmask]
+        # Accumulate converged region results into correct events. bincount is most
+        # efficient accumulator when multiple regions in the same event converge.
+        result_value += np.bincount(evtidx, value[converge_mask], nevts)
+        result_error += np.bincount(evtidx, error[converge_mask], nevts)
 
-        # Accumulate converged region results into correct events.
-        # bincount is most efficient accumulator when multiple regions in the same
-        # event converge.
-        result_value += np.bincount(evtidx, value[cmask], nevts)
-        result_error += np.bincount(evtidx, error[cmask], nevts)
-
-        if np.all(cmask):
+        if np.all(converge_mask):
             break
 
         # Locally unconverged regions. [ region, events ]
-        umask = ~cmask
-        active_region_mask = np.any(umask, axis=1)  # [ regions ]
-        active_event_mask = np.any(umask, axis=0)  # [ events ]
-        active_mask = np.ix_(active_region_mask, active_event_mask)
+        unconverged_mask = ~converge_mask
+        region_mask = np.any(unconverged_mask, axis=1)  # [ regions ]
+        event_mask = np.any(unconverged_mask, axis=0)  # [ events ]
+        active_mask = np.ix_(region_mask, event_mask)
+
         # Indices of unconverged events
-        active_evt_idx = active_evt_idx[active_event_mask]  # [kept_evts]
+        active_evt_idx = active_evt_idx[event_mask]  # [kept_evts]
 
         # update parent_values with active values
         parent_value = value[active_mask]  # [ kept_regions, kept_events ]
 
         # mask out the converged events from regions
-        center = [
-            c[active_region_mask] if c.shape[1] == 1 else c[active_mask] for c in center
-        ]
+        center = [c[region_mask] if c.shape[1] == 1 else c[active_mask] for c in center]
         halfwidth = [
-            h[active_region_mask] if h.shape[1] == 1 else h[active_mask]
-            for h in halfwidth
+            h[region_mask] if h.shape[1] == 1 else h[active_mask] for h in halfwidth
         ]
-        vol = vol[active_event_mask]
-        split_dim = split_dim[active_region_mask]
+        vol = vol[event_mask]
+        split_dim = split_dim[region_mask]
 
         # subdivide the un-converged regions [ kept_regions, kept_events ]
         center, halfwidth, vol = region.split(center, halfwidth, vol, split_dim)
-
-        # Perform the rule on un-converged regions.
-        value, error, split_dim = rule(center, halfwidth, vol, active_evt_idx)
-
-        iter += 1
+        pts = pts_(center, halfwidth, pts=pts)
 
     if iter == int(itermax):
         raise RuntimeWarning(

@@ -80,12 +80,13 @@ def k2indexes(ndim: int) -> Tuple[List[NPI], List[NPI]]:
     )
 
 
-def gm_pts(
-    center,
-    halfwidth,
+@cache
+def gm_weights(
+    dim,
     alpha2: float = 0.35856858280031809199064515390793749545406372969943071,
     alpha4: float = 0.94868329805051379959966806332981556011586654179756505,
     alpha5: float = 0.68824720161168529772162873429362352512689535661564885,
+    dtype=np.float64,
 ):
     # [7, 5] FS rule weights from Genz, Malik: "An adaptive algorithm for numerical
     # integration Over an N-dimensional rectangular region", updated by Bernstein,
@@ -94,45 +95,71 @@ def gm_pts(
     # alpha2 = 0.35856858280031809199064515390793749545406372969943071  # √(9/70)
     # alpha4 = 0.94868329805051379959966806332981556011586654179756505  # √(9/10)
     # alpha5 = 0.68824720161168529772162873429362352512689535661564885  # √(9/19)
+    npts = num_points(dim)
+
+    M = [np.empty(npts) for _ in range(dim)]
+    M1 = np.array([-alpha2, alpha2, -alpha4, alpha4], dtype=dtype)
+    M2a = np.array([-alpha4, alpha4, -alpha4, alpha4], dtype=dtype)
+    M2b = np.array([-alpha4, -alpha4, alpha4, alpha4], dtype=dtype)
+    M6 = np.array([*product([-alpha5, alpha5], repeat=dim)], dtype=dtype).T
+    k2A, k2B = k2indexes(dim)
+    off6 = num_k0k1(dim) + num_k2(dim)
+    for d in range(dim):
+        # k1: Center points in fullsym(lambda2, 0, ... ,0) & fullsym(a4, 0, ..., 0)
+        j = 4 * d
+        M[d][1 + j : 5 + j] = M1
+        # k2: Center points in full sym(lambda4, lambda4, ... ,0)
+        M[d][k2A[d]] = M2a
+        M[d][k2B[d]] = M2b
+        # k6: Center points in full sym(lambda5, lambda5, ... ,lambda5)
+        M[d][off6:] = M6[d]
+
+    return M
+
+
+def gm_pts(
+    center,
+    halfwidth,
+    alpha2: float = 0.35856858280031809199064515390793749545406372969943071,
+    alpha4: float = 0.94868329805051379959966806332981556011586654179756505,
+    alpha5: float = 0.68824720161168529772162873429362352512689535661564885,
+    pts=None,
+):
+    # [7, 5] FS rule weights from Genz, Malik: "An adaptive algorithm for numerical
+    # integration Over an N-dimensional rectangular region", updated by Bernstein,
+    # Espelid, Genz in "An Adaptive Algorithm for the Approximate Calculation of
+    # Multiple Integrals"
+    # alpha2 = 0.35856858280031809199064515390793749545406372969943071  # √(9/70)
+    # alpha4 = 0.94868329805051379959966806332981556011586654179756505  # √(9/10)
+    # alpha5 = 0.68824720161168529772162873429362352512689535661564885  # √(9/19)
+    #
+    # {center, halfwidth}  domain_dim * [ regions, { 1 | nevts } ]
+
     dim = len(center)
+    nreg = center[0].shape[0]
     npts = num_points(dim)
     dtype = center[0].dtype
 
-    # {center, halfwidth}  domain_dim * [ regions, { 1 | nevts } ]
-
     # p: domain_dim * [ points, regions, { 1 | nevts } ]
-    p = [np.tile(c, (npts, 1, 1)) for c in center]
+    if not pts:
+        pts = [
+            np.empty((npts, nreg * center[d].shape[1]), dtype=dtype) for d in range(dim)
+        ]
 
-    M1 = np.array([-alpha2, alpha2, -alpha4, alpha4], dtype=dtype)[:, None, None]
-    M2a = np.array([-alpha4, alpha4, -alpha4, alpha4], dtype=dtype)[:, None, None]
-    M2b = np.array([-alpha4, -alpha4, alpha4, alpha4], dtype=dtype)[:, None, None]
-    M6 = np.array([*product([-alpha5, alpha5], repeat=dim)], dtype=dtype).T[
-        ..., None, None
-    ]
+    M = gm_weights(dim, alpha2, alpha4, alpha5)
 
-    # k1T0 = np.tile(np.arange(dim)[:, None], (1, 4))
-    # k1T1 = np.arange(1, num_k0k1(dim)).reshape((dim, 4))
     for d in range(dim):
-        # k1
-        # Center points in fullsym(lambda2, 0, ... ,0) & fullsym(a4, 0, ..., 0)
-        k1i = 4 * d
-        p[d][1 + k1i : 5 + k1i] += M1 * halfwidth[d]
+        pts[d] = np.empty((npts, nreg * center[d].shape[1]), dtype=dtype)
+        np.multiply.outer(
+            M[d], halfwidth[d].reshape((nreg * halfwidth[d].shape[1])), out=pts[d]
+        )
+        np.add(pts[d], center[d].reshape((1, nreg * center[d].shape[1])), out=pts[d])
+        pts[d] = np.reshape(pts[d], (npts, nreg, center[d].shape[1]))
 
-        # k2
-        # Center points in full sym(lambda4, lambda4, ... ,0)
-        k2A, k2B = k2indexes(dim)
-        p[d][k2A[d]] += M2a * halfwidth[d]
-        p[d][k2B[d]] += M2b * halfwidth[d]
-
-        # k6
-        # Center points in full sym(lambda5, lambda5, ... ,lambda5)
-        off6 = num_k0k1(dim) + num_k2(dim)
-        p[d][off6:] += M6[d] * halfwidth[d]
-
-    return p
+    return pts
 
 
-def gk_pts(c: NPF, h: NPF) -> NPF:
+def gk_pts(center, halfwidth, pts=None):
     # GK [7, 15] node points from
     # https://www.advanpix.com/2011/11/07/gauss-kronrod-quadrature-nodes-weights/
     nodes = np.array(
@@ -155,12 +182,9 @@ def gk_pts(c: NPF, h: NPF) -> NPF:
         ]
     )
 
-    # {c, h}  [ regions, events ]
-    c = np.squeeze(c, 0)
-    h = np.squeeze(h, 0)
-
     # {p}  [ points, regions, events ]
-    p = c + np.multiply.outer(nodes, h)
+    p = center[0] + np.multiply.outer(nodes, halfwidth[0])
 
     # {p}  [ 1(domain_dim), points, regions, events ]
-    return p
+    # return [p]
+    return p[None, ...]

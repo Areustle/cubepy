@@ -44,7 +44,10 @@ def converged(
     E = np.copy(local_error)
     if r >= 1:
         E2 = np.abs(parent_result - (result[:r] + result[r:]))  # [ r/2, events ]
-        inv_error = np.reciprocal(local_error[:r] + local_error[r:])  # [ r/2, events ]
+        ES = local_error[:r] + local_error[r:]
+        inv_error = np.reciprocal(
+            np.where(ES == 0.0, np.finfo(ES.dtype).eps, ES)
+        )  # [ r/2, events ]
         E[:r] += E2 * (0.25 + 0.5 * inv_error * E[:r])
         E[r:] += E2 * (0.25 + 0.5 * inv_error * E[r:])
         # local_error_shape = local_error.shape
@@ -53,9 +56,6 @@ def converged(
         # G = 1.0 + 2.0 * F / (local_error[:d] + local_error[d:])
         # E = E * G + F
         # E = E.reshape(local_error_shape)
-
-    # print("[[[[[[[[[[[[[[[[[[[[[[[[[")
-    # print(E, atol, rtol, atol + rtol * np.abs(result))
 
     # {cmask}       [ regions, events ]
     return E <= (atol + rtol * np.abs(result))
