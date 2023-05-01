@@ -64,8 +64,8 @@ def integrate(
     The adaptive regional subdivision is performed independently for un-converged
     regions.
 
-    Local convergence is obtained when the global tolerance values exceed a local
-    region's error estimate.
+    Local convergence is obtained when the tolerance values exceed a local
+    region's error estimate by Bernsten's error estimation formula.
 
     Global convergence is obtained when all regions are locally converged.
 
@@ -87,9 +87,9 @@ def integrate(
             The finite integral high bound. Behavior is identical to `low` parameter.
         args: tuple, Optional
             The function arguments to pass into `f`.
-        reltol: float, Optional
+        rtol: float, Optional
             Relative local error tolerance. Default 1e-5
-        abstol: float, Optional
+        atol: float, Optional
             Absolute local error tolerance. Default 1e-8
         itermax: int or float, Optional
             Maximum number of subdivision iterations to perform on the integrand.
