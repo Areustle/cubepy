@@ -8,10 +8,9 @@ High-Performance, deterministic numerical integrator you've been waiting for.
 Integrate functions with:
 
 - [x] High Dimensional Domains
-- [x] High Dimensional Co-Domains
 - [x] Multiple limits of integration
 - [x] Independent batches computed concurrently.
-- [x] No Monte-Carlo!
+- [x] Deterministic Computation (No Monte-Carlo!)
 
 CubePy is a fully-vectorized python package for performing numerical integration on
 multi-dimensional vector functions. CubePy performs these operations efficiently using
@@ -106,7 +105,9 @@ np.allclose(v, exact_degree_20_polynomial(-np.pi, np.pi))
 
 ## References
 
-- Berntsen, Espelid, Genz. An Adaptive Algorithm for the Approximate Calculation of Multiple Integrals
+- Berntsen, Espelid, Genz. An Adaptive Algorithm for the Approximate Calculation of Multiple Integrals.
 - Berntsen. Practical error estimation in adaptive multidimensional quadrature routines.
 - Genz, Malik. An adaptive algorithm for numerical integration over an N-dimensional rectangular region.
+- Genz, Malik. An imbedded family of fully symmetric numerical integration rules.
 - Van Dooren, De Ridder. An adaptive algorithm for numerical in- tegration over an N-dimensional cube.
+
