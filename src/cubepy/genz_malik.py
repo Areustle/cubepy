@@ -1,32 +1,3 @@
-# BSD 3-Clause License
-#
-# Copyright (c) 2021, Alex Reustle
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice, this
-#    list of conditions and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions and the following disclaimer in the documentation
-#    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
 from functools import cache
@@ -70,20 +41,15 @@ def div_diff_weights(dim: int) -> NPF:
     ratio = 0.14285714285714285714285714285714285714285714285714281  # ⍺₂² / ⍺₄²
     a = np.zeros((dim, points.num_k0k1(dim)), dtype=float)
     a[:, 0] = -2 + 2 * ratio
-    # for i in range(dim):
-    #     start = 1 + (i * 4)
-    #     stop = start + 4
-    #     a[i, start:stop] = [1.0, 1.0, -ratio, -ratio]
-
     k1T0 = np.tile(np.arange(dim)[:, None], (1, 4))
     k1T1 = np.arange(1, points.num_k0k1(dim)).reshape((dim, 4))
-    # M1 = np.array([-alpha2, alpha2, -alpha4, alpha4], dtype=dtype)
     a[k1T0, k1T1] = [1.0, 1.0, -ratio, -ratio]
 
     return a
 
 
 def rule_split_dim(vals, err, halfwidth, volume):
+    # :::::::::::::: Shapes ::::::::::::::::
     # vals [ points, regions, events ]
     # err [ regions, events ]
     # halfwidth domain_dim * [ regions, { 1 | nevts } ]
@@ -115,7 +81,6 @@ def rule_split_dim(vals, err, halfwidth, volume):
     too_close = delta <= df
     split_dim[too_close] = widest_dim[too_close]
     return split_dim
-    # return np.full_like(split_dim, 2)
 
 
 @cache
