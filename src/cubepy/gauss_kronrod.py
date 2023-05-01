@@ -111,4 +111,4 @@ def gauss_kronrod(
     rabs = halfwidths[0] * np.tensordot(gk_weights, np.abs(vals), (0, 0))
     err[(rabs > (np.finfo(rk.dtype).tiny / min_err)) & (min_err > err)] = min_err
 
-    return (rk * halfwidths[0]), err, np.zeros(err.shape[-1], dtype=int)
+    return (rk * halfwidths[0]), err, np.zeros(err.shape[0], dtype=int)

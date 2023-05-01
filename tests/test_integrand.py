@@ -5,6 +5,75 @@ import cubepy as cp
 # import pytest
 
 
+def test_quadratic():
+    def quadratic(x):
+        return x**2
+
+    def exact_quadratic(a, b):
+        def exact(x):
+            return x**3 / 3.0
+
+        return exact(b) - exact(a)
+
+    v, _ = cp.integrate(quadratic, -1.0, 1.0)
+    assert np.allclose(v, exact_quadratic(-1, 1))
+
+    v, _ = cp.integrate(quadratic, -np.pi, np.pi)
+    assert np.allclose(v, exact_quadratic(-np.pi, np.pi))
+
+    rng = np.random.default_rng()
+    low = rng.uniform(-10, 10, 50)
+    high = low + rng.uniform(2, 32, 50)
+    v, _ = cp.integrate(quadratic, low, high)
+    assert np.allclose(v, exact_quadratic(low, high))
+
+
+def test_polynomial():
+    def poly(x):
+        return 2.0 * np.pi * x**4 - np.e * x**3 + 3.0 * x**2 - 4.0 * x + 8.0
+
+    def exact_poly(a, b):
+        def exact(x):
+            return (
+                (2.0 * np.pi / 5.0) * x**5
+                - np.e / 4.0 * x**4
+                + x**3
+                - 2.0 * x**2
+                + 8.0 * x
+            )
+
+        return exact(b) - exact(a)
+
+    v, _ = cp.integrate(poly, -1.0, 1.0)
+    assert np.allclose(v, exact_poly(-1.0, 1.0))
+
+    v, _ = cp.integrate(poly, -np.pi, np.pi)
+    assert np.allclose(v, exact_poly(-np.pi, np.pi))
+
+
+def test_high_polynomial():
+    def high_poly(x):
+        return 2.0 * np.pi * x**20 - np.e * x**3 + 3.0 * x**2 - 4.0 * x + 8.0
+
+    def exact_high_poly(a, b):
+        def exact(x):
+            return (
+                (2.0 * np.pi / 21.0) * x**21
+                - np.e / 4.0 * x**4
+                + x**3
+                - 2.0 * x**2
+                + 8.0 * x
+            )
+
+        return exact(b) - exact(a)
+
+    v, _ = cp.integrate(high_poly, -1.0, 1.0)
+    np.allclose(v, exact_high_poly(-1, 1))
+
+    v, _ = cp.integrate(high_poly, -np.pi, np.pi)
+    np.allclose(v, exact_high_poly(-np.pi, np.pi))
+
+
 def test_brick():
     def integrand_brick(x):
         return np.ones_like(x)
