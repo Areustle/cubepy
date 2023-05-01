@@ -53,10 +53,20 @@ def parse_input(
     signature_nint = f.__code__.co_argcount + f.__code__.co_kwonlyargcount - len(args)
     nint = signature_nint if nint is None else nint
 
+    low = [low] if isinstance(low, (int, float)) else low
+    high = [high] if isinstance(high, (int, float)) else high
+
     if len(low) != nint and not (nint == 1 and isinstance(low, np.ndarray)):
         raise RuntimeError("Bounds length not compatible with function signature.")
     if len(high) != nint and not (nint == 1 and isinstance(high, np.ndarray)):
         raise RuntimeError("Bounds length not compatible with function signature.")
+
+    low = [low] if nint == 1 and (isinstance(low, np.ndarray) and low.ndim < 2) else low
+    high = (
+        [high]
+        if nint == 1 and (isinstance(high, np.ndarray) and high.ndim < 2)
+        else high
+    )
 
     low = [np.asarray(x) for x in low]
     high = [np.asarray(x) for x in high]
@@ -76,10 +86,12 @@ def parse_input(
         )
 
     event_shape = big_event_shapes.pop() if big_event_shapes else (1,)
-    acceptable_arg_shapes = {event_shape, (1,), ()}
+
+    single_event_shapes = {(1,), ()}
+    acceptable_arg_shapes = {event_shape} | single_event_shapes
     arg_shapes = {np.asarray(x).shape for x in args}
 
-    if arg_shapes - acceptable_arg_shapes:
+    if arg_shapes - acceptable_arg_shapes and event_shape not in single_event_shapes:
         raise RuntimeError(
             "Integrand funciton has non-integrable user-provided Arguments with "
             f"incompatible shapes {acceptable_arg_shapes}"
