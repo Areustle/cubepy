@@ -30,21 +30,21 @@ jobs:
             platform_id: macosx_x86_64
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Get history and tags for SCM versioning
       run: |
         git fetch --prune --unshallow
         git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
     - name: Set Up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v3
 
     - name: Build wheels
       run: |
         pip wheel -w wheelhouse . --no-deps
 
     - name: Upload Build Artifact
-      uses: actions/upload-artifact@v2.2.4
+      uses: actions/upload-artifact@v3
       with:
         name: cubepy-gh-pypi-artifact
         path: wheelhouse/*.whl
